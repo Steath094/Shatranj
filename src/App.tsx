@@ -52,9 +52,16 @@ function App() {
             return (
               <div key={index} className={`w-16 h-16 flex items-center justify-center ${selectedSquare === index ? "bg-[#A9A9A9]" : isBgWhite ? 'bg-[#EBECD0]' : 'bg-[#739552]'} ${piece && `hover:bg-[#A9A9A9] transition-colors duration-300 cursor-grab`} ${selectedSquare === index ? "bg-[#A9A9A9] border-2 border-amber-900" : ""}`  } onClick={()=> {
                 if (piece) { 
-                    setSelectedSquare(index);
+                    setSelectedSquare(prev =>
+                      prev === index ? null : index
+                    );
+                }else{
+                  debugger;
+                  board[index] = board[selectedSquare ?? index];
+                  board[selectedSquare ?? index] = "";
+                  setBoard([...board]);
                 }
-                console.log(`Clicked on square ${selectedSquare} with piece ${piece}`);
+                console.log(`Clicked on square ${index} with piece ${piece}`);
               }}>
                 {piece && <img src={pieceImages[piece]} alt={piece} className="w-12 h-12" />}
                 {col === 0 && <span className={`relative ${piece ? `-top-4 right-12` : `-top-5 -left-6`} text-xs font-bold text-gray-600`}>{8 - row}</span>}
