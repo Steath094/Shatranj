@@ -1,108 +1,12 @@
-import { useState } from 'react';
 import './App.css'
-
-const initialBoard = [
-  // Rank 8 (Black back rank)
-  "r", "n", "b", "q", "k", "b", "n", "r",
-  // Rank 7 (Black pawns)
-  "p", "p", "p", "p", "p", "p", "p", "p",
-  // Rank 6 (Empty)
-  "", "", "", "", "", "", "", "",
-  // Rank 5 (Empty)
-  "", "", "", "", "", "", "", "",
-  // Rank 4 (Empty)
-  "", "", "", "", "", "", "", "",
-  // Rank 3 (Empty)
-  "", "", "", "", "", "", "", "",
-  // Rank 2 (White pawns)
-  "P", "P", "P", "P", "P", "P", "P", "P",
-  // Rank 1 (White back rank)
-  "R", "N", "B", "Q", "K", "B", "N", "R"
-];
-const pieceImages: { [key: string]: string } = {
-  "r": "./rook-b.svg",
-  "n": "./knight-b.svg",
-  "b": "./bishop-b.svg",
-  "q": "./queen-b.svg",
-  "k": "./king-b.svg",
-  "p": "./pawn-b.svg",
-  "R": "./rook-w.svg",
-  "N": "./knight-w.svg",
-  "B": "./bishop-w.svg",
-  "Q": "./queen-w.svg",
-  "K": "./king-w.svg",
-  "P": "./pawn-w.svg"
-};
+import Board from './components/Board'
 
 function App() {
-  const [board, setBoard] = useState<string[]>(initialBoard);
-  const [selectedSquare, setSelectedSquare] = useState<number | null>(null);
-  const [legalMoves, setLegalMoves] = useState<number[]>([]);
 
-  const handleSquareClick = (index: number) => {
-    const piece = board[index];
-    setLegalMoves([]);
-    if (piece) { 
-        setSelectedSquare(prev =>
-          prev === index ? null : index
-        );
-        const moves = getPawnMoves(board, index);
-        setLegalMoves(moves);
-    }else{
-      const newBoard = [...board];
-      newBoard[index] = newBoard[selectedSquare!];
-      newBoard[selectedSquare!] = "";
-      setBoard(newBoard);
-    }
-    console.log(`Clicked on square ${index} with piece ${piece}`);
-  }
-  function getPawnMoves(board: string[], index: number): number[] {
-    const piece = board[index];
-    if (piece !== "P" && piece !== "p") return [];
-    let row = Math.floor(index / 8);
-    let col = index % 8;
-    let res = [];
-    if (piece ==="P"){
-      row -= 1;
-      let newIndex = row * 8 + col; 
-      if(board[newIndex] === "") res.push(newIndex); // Possible move for the white pawn
-      row -= 1;
-      newIndex = row * 8 + col; 
-      if(board[newIndex] === "") res.push(newIndex); // Possible move for the white pawn
-      return res;
-    }else{
-      row += 1;
-      let newIndex = row * 8 + col; 
-      if(board[newIndex] === "") res.push(newIndex); // Possible move for the black pawn
-      row += 1;
-      newIndex = row * 8 + col; 
-      if(board[newIndex] === "") res.push(newIndex); // Possible move for the black pawn
-      return res;
-    }
-  }
+  
   return (
     <>
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#302E2B]">
-        <h1 className="text-6xl font-bold mb-8 text-white">शतरंज</h1>
-        <div className="grid grid-cols-8 gap-0 border-4 border-red-950">
-          {board.map((piece, index) => {
-            const row = Math.floor(index / 8);
-            const col = index % 8;
-
-            const isBgWhite = (row + col) % 2 === 0;
-
-            return (
-              <div key={index} className={`w-16 h-16 flex items-center justify-center ${selectedSquare === index ? "bg-[#A9A9A9]" : isBgWhite ? 'bg-[#EBECD0]' : 'bg-[#739552]'} ${piece && `hover:bg-[#A9A9A9] transition-colors duration-300 cursor-grab`} ${selectedSquare === index ? "bg-[#A9A9A9] border-2 border-amber-900" : ""}`  } onClick={() => handleSquareClick(index)}>
-                {legalMoves.includes(index) && <div className="w-4 h-4 bg-[#A9A9A9] rounded-full"></div>}
-                {(piece && pieceImages[piece]) && <img src={pieceImages[piece]} alt={piece} className="w-12 h-12" />}
-                {col === 0 && <span className={`relative ${piece ? `-top-4 right-12` : `-top-5 -left-6`} text-xs font-bold text-gray-600`}>{8 - row}</span>}
-                {row === 7 && <span className={`relative ${piece ? `-bottom-5 right-1` : `-bottom-5 -right-5`} text-xs font-bold text-gray-600`}>{String.fromCharCode(97 + col)}</span>}
-              </div>
-            )
-          })}
-       
-        </div>
-      </div>
+      <Board/>
     </>
   )
 }
