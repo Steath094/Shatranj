@@ -1,6 +1,4 @@
 import type { Piece } from "../types/chess";
-import { getBishopMoves } from "./bishop";
-import { getRookMoves } from "./rook";
 import { traceDirections } from "./traceDirection";
 
 export const getQueenMoves = (board: Piece[], index: number) : number[]  => {
