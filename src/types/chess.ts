@@ -23,3 +23,12 @@ export interface Move {
 
     captured:Piece;
 }
+
+export interface ClickResult {
+    boardChanged: boolean;
+    selectionChanged: boolean;
+    // captured: boolean;
+    // check: boolean;
+    // checkmate: boolean;
+    // promotion?: boolean;
+}

@@ -1,4 +1,4 @@
-import type { Move, Piece } from "../types/chess";
+import type { ClickResult, Move, Piece } from "../types/chess";
 import { getLegalMoves } from "./moveGenerator";
 
 export class Game {
@@ -82,22 +82,34 @@ export class Game {
         }
     }
 
-    clickSquare = (position: number) => {
+    handleSquareSelection = (position: number): ClickResult => {
 
         const isNothingSelected = this.selectedSquare===null
         if (isNothingSelected) {
-            if (this.board[position] === "") return;
-            if (this.getPieceColor(position)!==this.currentTurn) return;
+            if (this.board[position] === "") return {
+                boardChanged: false,
+                selectionChanged: false,
+            };
+            if (this.getPieceColor(position)!==this.currentTurn) return {
+                boardChanged: false,
+                selectionChanged: false,
+            };;
             this.selectedSquare = position;
             
             this.legalMoves = this.getLegalMoves(position);
-            return;
+            return {
+                boardChanged: false,
+                selectionChanged: true,
+            };
         }else{
             if (this.getPieceColor(position)==this.currentTurn) {
                 this.selectedSquare = position;
             
                 this.legalMoves = this.getLegalMoves(position);
-                return;
+                return {
+                    boardChanged: false,
+                    selectionChanged: true,
+                };
             }
             if (this.selectedSquare !== null) {
                 this.commitMove(this.selectedSquare,position);
@@ -105,6 +117,10 @@ export class Game {
     
             this.selectedSquare = null;
             this.legalMoves = [];
+            return {
+                boardChanged: true,
+                selectionChanged: true,
+            };
         }
     }
 }

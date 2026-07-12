@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useRef, useState } from "react";
 import { Game } from "../engine/Game";
-import type { Piece } from "../types/chess";
+import type { ClickResult, Piece } from "../types/chess";
 
 
 const pieceImages: { [key: string]: string } = {
@@ -44,9 +44,10 @@ function Board() {
                 key={index}
                 className={`w-16 h-16 flex items-center justify-center ${game?.selectedSquare === index ? "bg-[#A9A9A9]" : isBgWhite ? "bg-[#EBECD0]" : "bg-[#739552]"} ${piece && `hover:bg-[#A9A9A9] transition-colors duration-300 cursor-grab`} ${game?.selectedSquare === index ? "bg-[#A9A9A9] border-2 border-amber-900" : ""}`}
                 onClick={() => {
-                  game.clickSquare(index);
-
-                  setBoard([...game.board]);
+                  const result: ClickResult = game.handleSquareSelection(index);
+                  if (result.boardChanged) {
+                    setBoard([...game.board]);                  
+                  }
                 }}
               >
                 {game?.legalMoves.includes(index) && (
