@@ -12,3 +12,14 @@ export type Piece =
   | "b"
   | "q"
   | "k";
+
+export interface Move {
+
+    from:number;
+
+    to:number;
+
+    piece:Piece;
+
+    captured:Piece;
+}
