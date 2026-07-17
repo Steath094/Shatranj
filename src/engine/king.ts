@@ -1,4 +1,5 @@
 import type { Piece } from "../types/chess";
+import { isEnemyPiece } from "./common";
 
 export const getKingMoves = (board: Piece[], index: number): number[] => {
     const piece = board[index];
@@ -10,7 +11,7 @@ export const getKingMoves = (board: Piece[], index: number): number[] => {
         [row-1,col],
         [row+1,col],
         [row,col+1],
-        [row,col+1],
+        [row,col-1],
         [row+1,col+1],
         [row+1,col-1],
         [row-1,col-1],
@@ -19,10 +20,15 @@ export const getKingMoves = (board: Piece[], index: number): number[] => {
     for (const [newRow,newCol] of kingMoves){
         if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
             const newIndex = newRow * 8 + newCol;
-            if (board[newIndex] === "") {
-                moves.push(newIndex);
+            const currPiece = board[newIndex];
+            if (board[newIndex] !== "") {
+                if (isEnemyPiece(piece,currPiece)) {
+                    moves.push(newIndex);
+                }
+                continue;
             }
+            moves.push(newIndex);
         }
-    }
+    };;
     return moves;
 }

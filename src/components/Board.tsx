@@ -31,7 +31,7 @@ function Board() {
       >
         <h1 className="text-6xl font-bold mb-8 text-white">शतरंज</h1>
         <div
-          className={`${game?.currentTurn == "black" && "rotate-180"} grid grid-cols-8 gap-0 border-4 border-red-950`}
+          className={`grid grid-cols-8 gap-0 border-4 border-red-950`}
         >
           {board?.map((piece, index) => {
             const row = Math.floor(index / 8);
@@ -44,8 +44,9 @@ function Board() {
                 key={index}
                 className={`w-16 h-16 flex items-center justify-center ${game?.selectedSquare === index ? "bg-[#A9A9A9]" : isBgWhite ? "bg-[#EBECD0]" : "bg-[#739552]"} ${piece && `hover:bg-[#A9A9A9] transition-colors duration-300 cursor-grab`} ${game?.selectedSquare === index ? "bg-[#A9A9A9] border-2 border-amber-900" : ""}`}
                 onClick={() => {
+                  debugger;
                   const result: ClickResult = game.handleSquareSelection(index);
-                  if (result.boardChanged) {
+                  if (result.boardChanged || result.selectionChanged) {
                     setBoard([...game.board]);                  
                   }
                 }}

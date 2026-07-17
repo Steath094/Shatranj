@@ -1,5 +1,5 @@
 import type { ClickResult, Move, Piece } from "../types/chess";
-import { getLegalMoves } from "./moveGenerator";
+import { getPseudoLegalMoves } from "./moveGenerator";
 
 export class Game {
     board : Piece[];
@@ -57,7 +57,7 @@ export class Game {
     }
 
     getLegalMoves = (position: number) : number[] =>{
-        return getLegalMoves(this.board,position);
+        return getPseudoLegalMoves(this.board,position);
     }
 
     getPieceColor = (position : number): "white" | "black" | null =>{
@@ -80,6 +80,10 @@ export class Game {
             default:
                 return null;
         }
+    }
+
+    isEmpty = (position : number): boolean => {
+        return this.board[position] === "";
     }
 
     handleSquareSelection = (position: number): ClickResult => {
@@ -123,4 +127,6 @@ export class Game {
             };
         }
     }
+
+    // canCapture = ()
 }

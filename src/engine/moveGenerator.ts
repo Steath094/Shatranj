@@ -6,7 +6,7 @@ import { getPawnMoves } from "./pawn";
 import { getQueenMoves } from "./queen";
 import { getRookMoves } from "./rook";
 
-export const getLegalMoves = (board: Piece[], index: number): number[] => {
+export const getPseudoLegalMoves = (board: Piece[], index: number): number[] => {
     const piece = board[index];
     switch (piece) {
         case "P":

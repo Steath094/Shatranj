@@ -2,8 +2,6 @@ import type { Piece } from "../types/chess";
 import { traceDirections } from "./traceDirection";
 
 export const getQueenMoves = (board: Piece[], index: number) : number[]  => {
-    const row = Math.floor(index / 8);
-    const col = index % 8;
     const directions: number[][] = [
         [-1,-1],
         [1,1],
@@ -17,8 +15,7 @@ export const getQueenMoves = (board: Piece[], index: number) : number[]  => {
 
     return traceDirections(
         board,
-        row,
-        col,
+        index,
         directions
     );
 }
