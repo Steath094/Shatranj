@@ -1,9 +1,10 @@
-import type { ClickResult, Move, Piece } from "../types/chess";
+import type { ClickResult, Move, Piece, turn } from "../types/chess";
 import { getPseudoLegalMoves } from "./moveGenerator";
+import { getPawnAttackSquares } from "./pawn";
 
 export class Game {
     board : Piece[];
-    currentTurn : "white" | "black";
+    currentTurn : turn;
     history: Move[] ;
     selectedSquare: number | null;
     legalMoves: number[];
@@ -55,12 +56,36 @@ export class Game {
             captured: capturedPiece,
         })
     }
-
-    getLegalMoves = (position: number) : number[] =>{
+    makeMove = (from: number, to: number) => {
+        this.board[to] = this.board[from];
+        this.board[from] = "";
+    }
+    undoMove = (from: number, to: number, movingPiece: Piece, capturedPiece: Piece) => {
+        this.board[from] = movingPiece;
+        this.board[to] = capturedPiece;
+    }
+    getPseudoLegalMoves = (position: number) : number[] =>{
         return getPseudoLegalMoves(this.board,position);
     }
+    getLegalMoves = (position: number) : number[] =>{
+        const pseudoMoves = this.getPseudoLegalMoves(position);
+        let legalMoves: number[]= [];
+        for (let index = 0; index < pseudoMoves.length; index++) {
+            const move = pseudoMoves[index];
+            const movingPiece = this.board[position];
+            const capturedPiece = this.board[move];
 
-    getPieceColor = (position : number): "white" | "black" | null =>{
+            this.makeMove(position,move);
+            if (!this.isKingInCheck(this.currentTurn)) {
+                legalMoves.push(move);
+            }
+
+            this.undoMove(position, move, movingPiece, capturedPiece);
+
+        }
+        return legalMoves;
+    }
+    getPieceColor = (position : number): turn | null =>{
         const piece = this.board[position];
         switch (piece) {
             case "P":
@@ -128,5 +153,34 @@ export class Game {
         }
     }
 
-    // canCapture = ()
+    findKing = (color: turn): number => {
+        const piece = color=="white" ? "K" : "k";
+        for (let index = 0; index < this.board.length; index++) {
+            if (this.board[index]==piece) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    isSquareAttacked = (position: number, color: turn): boolean => {
+        for (let index = 0; index < this.board.length; index++) {
+            if (this.getPieceColor(index)==color) {
+                let legalMoves;
+                if (this.board[index]=="p" || this.board[index]=="P") {
+                    legalMoves = getPawnAttackSquares(this.board,index);
+                }else{
+                    legalMoves = this.getPseudoLegalMoves(index);
+                }
+                if (legalMoves.includes(position)) return true;
+            }
+        }
+        return false;
+    }
+    isKingInCheck = (color: turn): boolean => {
+        const position = this.findKing(color);
+        const opponent: turn = color=="white" ? "black" : "white";
+        return this.isSquareAttacked(position,opponent);
+    }
+    
 }

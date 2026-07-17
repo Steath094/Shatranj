@@ -32,7 +32,7 @@ export function getPawnMoves(board: Piece[], index: number): number[] {
   newCol = col + 1;
   if (!OutOfBound(newRow,newCol)) {
     newIndex = newRow*8+newCol;
-    if (isEnemyPiece(piece,board[newIndex])) {
+    if (board[newIndex] !== "" && isEnemyPiece(piece,board[newIndex])) {
       moves.push(newIndex);
     }
   }
@@ -40,9 +40,37 @@ export function getPawnMoves(board: Piece[], index: number): number[] {
   newCol = col - 1;
   if (!OutOfBound(newRow,newCol)) {
     newIndex = newRow*8+newCol;
-    if (isEnemyPiece(piece,board[newIndex])) {
+    if (board[newIndex] !== "" && isEnemyPiece(piece,board[newIndex])) {
       moves.push(newIndex);
     }
+  }
+  
+  return moves;
+}
+
+
+export function getPawnAttackSquares(board: Piece[], index: number): number[] {
+  const piece = board[index];
+  const row = Math.floor(index / 8);
+  const col = index % 8;
+  let moves: number[] = [];
+  let newIndex;
+  let newRow;
+  let newCol;
+  const color = getColor(piece);
+  const direction = color === "white" ? -1 : +1;
+
+  newRow = row + (direction*1);
+  newCol = col + 1;
+  if (!OutOfBound(newRow,newCol)) {
+    newIndex = newRow*8+newCol;
+    moves.push(newIndex);
+  }
+  
+  newCol = col - 1;
+  if (!OutOfBound(newRow,newCol)) {
+    newIndex = newRow*8+newCol;
+     moves.push(newIndex);
   }
   
   return moves;

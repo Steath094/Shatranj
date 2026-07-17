@@ -32,3 +32,5 @@ export interface ClickResult {
     // checkmate: boolean;
     // promotion?: boolean;
 }
+
+export type turn = "white" | "black";

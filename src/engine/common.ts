@@ -6,9 +6,6 @@ export const isEnemyPiece = (source: Piece,destination: Piece) => {
     return srcCOlor!==destCOlor;
 }
 export const getColor = (piece: Piece) =>{
-    if (piece==="") {
-        return "empty"
-    }
     const white: Piece[] = ["R","P","K","N","B","Q"];
     return white.includes(piece) ? "white" : "black";
 }
