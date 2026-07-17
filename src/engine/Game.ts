@@ -8,6 +8,7 @@ export class Game {
     history: Move[] ;
     selectedSquare: number | null;
     legalMoves: number[];
+    castlingRights;
     constructor() {
         this.board = [
           // Rank 8 (Black back rank)
@@ -31,6 +32,16 @@ export class Game {
         this.history = [];
         this.selectedSquare = null;
         this.legalMoves = [];
+        this.castlingRights = {
+            white: {
+                kingSide: true,
+                queenSide: true,
+            },
+            black: {
+                kingSide: true,
+                queenSide: true,
+            }
+        }
     }
     changeTurn = () => {
         if (this.currentTurn=="white") {
@@ -45,8 +56,7 @@ export class Game {
         const movingPiece = this.board[from];
         const capturedPiece = this.board[to];
 
-        this.board[to] = this.board[from];
-        this.board[from] = "";
+        this.makeMove(from,to);
 
         this.changeTurn();
         this.history.push({
@@ -55,6 +65,27 @@ export class Game {
             piece: movingPiece,
             captured: capturedPiece,
         })
+        if (movingPiece=="K") {
+            this.castlingRights.white.kingSide=false;
+            this.castlingRights.white.queenSide=false;
+        }
+        if (movingPiece=="k") {
+            this.castlingRights.black.kingSide=false;
+            this.castlingRights.black.queenSide=false;
+        }
+        if ((movingPiece=="r" && from==0) || (capturedPiece=="r" && to==0)) {
+            this.castlingRights.black.queenSide=false;
+        }
+        if ((movingPiece=="r" && from==7) || (capturedPiece=="r" && to==7)) {
+            this.castlingRights.black.kingSide=false;
+        }
+        if ((movingPiece=="R" && from==56) || (capturedPiece=="R" && to==56)) {
+            this.castlingRights.white.queenSide=false;
+        }
+        if ((movingPiece=="R" && from==63) || (capturedPiece=="R" && to==63)) {
+            this.castlingRights.white.kingSide=false;
+        }
+
     }
     makeMove = (from: number, to: number) => {
         this.board[to] = this.board[from];
@@ -182,5 +213,77 @@ export class Game {
         const opponent: turn = color=="white" ? "black" : "white";
         return this.isSquareAttacked(position,opponent);
     }
-    
+    hasLegalMoves = (color: turn): boolean => {
+        for (let index = 0; index < this.board.length; index++) {
+            if (this.getPieceColor(index) == color) {
+                const legalMoves = this.getLegalMoves(index);
+                if (legalMoves.length>0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    checkmate = (color: turn): boolean => {
+        if (this.isKingInCheck(color) && !this.hasLegalMoves(color)) {
+            return true;
+        }
+        return false;
+    }
+    staleMate = (color: turn): boolean => {
+        if (!this.isKingInCheck(color) && !this.hasLegalMoves(color)) {
+            return true;
+        }
+        return false;
+    }
+
+    // castling = (color: turn): boolean => {
+    //     if (!(this.castlingRights[color].kingSide || this.castlingRights[color].queenSide)) {
+    //         return false;
+    //     }
+    //     if (this.isKingInCheck(color)) return false;
+
+    //     const opponent: turn = color=="white" ? "black" : "white";
+    //     const index = {
+    //         white: {
+    //             kingSide: {
+    //                 start: 60,
+    //                 end: 63
+    //             },
+    //             queenSide: {
+    //                 start: 56,
+    //                 end: 60
+    //             },
+    //         },
+    //         black: {
+    //             kingSide: {
+    //                 start: 4,
+    //                 end: 7
+    //             },
+    //             queenSide: {
+    //                 start: 0,
+    //                 end: 4
+    //             },
+    //         }
+    //     }
+    //     let start = 0;
+    //     let end = 0;
+    //     if (this.castlingRights[color].kingSide) {
+    //         start = index[color].kingSide.start;
+    //         end = index[color].kingSide.end;
+    //     }else if (this.castlingRights[color].queenSide) {
+    //         start = index[color].queenSide.start;
+    //         end = index[color].queenSide.end;
+    //     }
+        
+    //     for (let index = start+1; index < end; index++) {
+    //         if (!this.isEmpty(index)) {
+    //             return false;
+    //         }
+    //         if (this.isSquareAttacked(index,opponent)) {
+    //             return false;
+    //         }
+    //     }
+    //     return true;
+    // }
 }
