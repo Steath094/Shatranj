@@ -34,3 +34,14 @@ export interface ClickResult {
 }
 
 export type turn = "white" | "black";
+
+export type CastlingRights = {
+    white: {
+        kingSide: boolean;
+        queenSide: boolean;
+    };
+    black: {
+        kingSide: boolean;
+        queenSide: boolean;
+    };
+};

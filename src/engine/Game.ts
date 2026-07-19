@@ -1,4 +1,4 @@
-import type { ClickResult, Move, Piece, turn } from "../types/chess";
+import type { CastlingRights, ClickResult, Move, Piece, turn } from "../types/chess";
 import { getPseudoLegalMoves } from "./moveGenerator";
 import { getPawnAttackSquares } from "./pawn";
 
@@ -8,7 +8,7 @@ export class Game {
     history: Move[] ;
     selectedSquare: number | null;
     legalMoves: number[];
-    castlingRights;
+    castlingRights: CastlingRights;
     constructor() {
         this.board = [
           // Rank 8 (Black back rank)
@@ -55,8 +55,19 @@ export class Game {
 
         const movingPiece = this.board[from];
         const capturedPiece = this.board[to];
-
-        this.makeMove(from,to);
+        if (movingPiece === "K" && from === 60 && to === 62) {
+            this.makeMove(from, to);
+            this.makeMove(63, 61);
+        }else if (movingPiece === "K" && from === 60 && to === 58) {
+            this.makeMove(from, to);
+            this.makeMove(56, 59);
+        }else if (movingPiece === "k" && from === 4 && to === 6) {
+            this.makeMove(from, to);
+            this.makeMove(7, 5);
+        }else if (movingPiece === "k" && from === 4 && to === 2) {
+            this.makeMove(from, to);
+            this.makeMove(0, 3);
+        } else this.makeMove(from,to);
 
         this.changeTurn();
         this.history.push({
@@ -99,8 +110,10 @@ export class Game {
         return getPseudoLegalMoves(this.board,position);
     }
     getLegalMoves = (position: number) : number[] =>{
+        const piece = this.board[position];
         const pseudoMoves = this.getPseudoLegalMoves(position);
         let legalMoves: number[]= [];
+
         for (let index = 0; index < pseudoMoves.length; index++) {
             const move = pseudoMoves[index];
             const movingPiece = this.board[position];
@@ -114,6 +127,12 @@ export class Game {
             this.undoMove(position, move, movingPiece, capturedPiece);
 
         }
+
+        if (piece === "K" || piece === "k") {
+            const color = this.getPieceColor(position)!;
+            legalMoves.push(...this.getCastleMoves(color));
+        }
+
         return legalMoves;
     }
     getPieceColor = (position : number): turn | null =>{
@@ -225,16 +244,10 @@ export class Game {
         return false;
     }
     checkmate = (color: turn): boolean => {
-        if (this.isKingInCheck(color) && !this.hasLegalMoves(color)) {
-            return true;
-        }
-        return false;
+        return this.isKingInCheck(color) && !this.hasLegalMoves(color);
     }
     staleMate = (color: turn): boolean => {
-        if (!this.isKingInCheck(color) && !this.hasLegalMoves(color)) {
-            return true;
-        }
-        return false;
+        return !this.isKingInCheck(color) && !this.hasLegalMoves(color);
     }
 
     // castling = (color: turn): boolean => {
@@ -286,4 +299,93 @@ export class Game {
     //     }
     //     return true;
     // }
+
+    canCastleKingSide(color: turn): boolean {
+        if (!this.castlingRights[color].kingSide) return false;
+
+        if (this.isKingInCheck(color)) return false;
+
+        const opponent: turn = color === "white" ? "black" : "white";
+
+        const kingPos = color === "white" ? 60 : 4;
+        const rookPos = color === "white" ? 63 : 7;
+
+        if (this.board[kingPos] !== (color === "white" ? "K" : "k"))
+            return false;
+
+        if (this.board[rookPos] !== (color === "white" ? "R" : "r"))
+            return false;
+
+        const squares =
+            color === "white"
+                ? [61, 62]
+                : [5, 6];
+
+        // Squares between king and rook must be empty
+        for (const square of squares) {
+            if (!this.isEmpty(square))
+                return false;
+        }
+
+        // Squares king passes through must not be attacked
+        for (const square of [kingPos, ...squares]) {
+            if (this.isSquareAttacked(square, opponent))
+                return false;
+        }
+
+        return true;
+    }
+
+    canCastleQueenSide(color: turn): boolean {
+        if (!this.castlingRights[color].queenSide) return false;
+
+        if (this.isKingInCheck(color)) return false;
+
+        const opponent: turn = color === "white" ? "black" : "white";
+
+        const kingPos = color === "white" ? 60 : 4;
+        const rookPos = color === "white" ? 56 : 0;
+
+        if (this.board[kingPos] !== (color === "white" ? "K" : "k"))
+            return false;
+
+        if (this.board[rookPos] !== (color === "white" ? "R" : "r"))
+            return false;
+
+        const emptySquares =
+            color === "white"
+                ? [57, 58, 59]
+                : [1, 2, 3];
+
+        const attackedSquares =
+            color === "white"
+                ? [60, 59, 58]
+                : [4, 3, 2];
+
+        for (const square of emptySquares) {
+            if (!this.isEmpty(square))
+                return false;
+        }
+
+        for (const square of attackedSquares) {
+            if (this.isSquareAttacked(square, opponent))
+                return false;
+        }
+
+        return true;
+    }
+
+    getCastleMoves(color: turn): number[] {
+        const moves: number[] = [];
+
+        if (this.canCastleKingSide(color)) {
+            moves.push(color === "white" ? 62 : 6);
+        }
+
+        if (this.canCastleQueenSide(color)) {
+            moves.push(color === "white" ? 58 : 2);
+        }
+
+        return moves;
+    }
 }
