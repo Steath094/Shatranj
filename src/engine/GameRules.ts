@@ -1,9 +1,9 @@
-import type { CastlingRights, Piece, turn } from "../types/chess";
+import type { CastlingRights, Move, Piece, turn } from "../types/chess";
 import { getPseudoLegalMoves } from "./moveGenerator";
 import { getPawnAttackSquares } from "./pawn";
 
 export class GameRules {
-    static getLegalMoves(board: Piece[], position: number, currentTurn: turn, castlingRights: CastlingRights): number[] {
+    static getLegalMoves(board: Piece[], position: number, currentTurn: turn, castlingRights: CastlingRights, history: Move[]): number[] {
         const piece = board[position];
         const pseudoMoves = getPseudoLegalMoves(board, position);
         const legalMoves: number[] = [];
@@ -17,6 +17,25 @@ export class GameRules {
 
             if (!GameRules.isKingInCheck(nextBoard, currentTurn)) {
                 legalMoves.push(move);
+            }
+        }
+
+        if (piece === "P" || piece === "p") {
+            const enPassantMove = GameRules.getEnPassantMove(board, position, currentTurn, history);
+            const capturedPawnPosition = enPassantMove === null
+                ? null
+                : GameRules.getEnPassantCapturePosition(board, position, enPassantMove, currentTurn, history);
+
+            if (enPassantMove !== null && capturedPawnPosition !== null) {
+                const nextBoard = [...board];
+
+                nextBoard[enPassantMove] = nextBoard[position];
+                nextBoard[position] = "";
+                nextBoard[capturedPawnPosition] = "";
+
+                if (!GameRules.isKingInCheck(nextBoard, currentTurn)) {
+                    legalMoves.push(enPassantMove);
+                }
             }
         }
 
@@ -59,10 +78,10 @@ export class GameRules {
         return GameRules.isSquareAttacked(board, position, opponent);
     }
 
-    static hasLegalMoves(board: Piece[], color: turn, currentTurn: turn, castlingRights: CastlingRights): boolean {
+    static hasLegalMoves(board: Piece[], color: turn, currentTurn: turn, castlingRights: CastlingRights, history: Move[]): boolean {
         for (let index = 0; index < board.length; index++) {
             if (GameRules.getPieceColor(board, index) == color) {
-                const legalMoves = GameRules.getLegalMoves(board, index, currentTurn, castlingRights);
+                const legalMoves = GameRules.getLegalMoves(board, index, currentTurn, castlingRights, history);
                 if (legalMoves.length > 0) {
                     return true;
                 }
@@ -71,12 +90,12 @@ export class GameRules {
         return false;
     }
 
-    static checkmate(board: Piece[], color: turn, currentTurn: turn, castlingRights: CastlingRights): boolean {
-        return GameRules.isKingInCheck(board, color) && !GameRules.hasLegalMoves(board, color, currentTurn, castlingRights);
+    static checkmate(board: Piece[], color: turn, currentTurn: turn, castlingRights: CastlingRights, history: Move[]): boolean {
+        return GameRules.isKingInCheck(board, color) && !GameRules.hasLegalMoves(board, color, currentTurn, castlingRights, history);
     }
 
-    static staleMate(board: Piece[], color: turn, currentTurn: turn, castlingRights: CastlingRights): boolean {
-        return !GameRules.isKingInCheck(board, color) && !GameRules.hasLegalMoves(board, color, currentTurn, castlingRights);
+    static staleMate(board: Piece[], color: turn, currentTurn: turn, castlingRights: CastlingRights, history: Move[]): boolean {
+        return !GameRules.isKingInCheck(board, color) && !GameRules.hasLegalMoves(board, color, currentTurn, castlingRights, history);
     }
 
     static canCastleKingSide(board: Piece[], color: turn, castlingRights: CastlingRights): boolean {
@@ -168,6 +187,51 @@ export class GameRules {
 
     static isPromotionMove(piece: Piece, to: number): boolean {
         return (piece === "P" && to >= 0 && to < 8) || (piece === "p" && to >= 56 && to < 64);
+    }
+
+    static getEnPassantMove(board: Piece[], position: number, currentTurn: turn, history: Move[]): number | null {
+        const piece = board[position];
+        const ownPawn = currentTurn === "white" ? "P" : "p";
+        const enemyPawn = currentTurn === "white" ? "p" : "P";
+
+        if (piece !== ownPawn) return null;
+
+        const lastMove = history[history.length - 1];
+        if (!lastMove) return null;
+        if (lastMove.piece !== enemyPawn) return null;
+        if (board[lastMove.to] !== enemyPawn) return null;
+
+        const lastFromRow = Math.floor(lastMove.from / 8);
+        const lastToRow = Math.floor(lastMove.to / 8);
+        const lastToCol = lastMove.to % 8;
+        const pawnRow = Math.floor(position / 8);
+        const pawnCol = position % 8;
+
+        const expectedFromRow = enemyPawn === "p" ? 1 : 6;
+        const expectedToRow = enemyPawn === "p" ? 3 : 4;
+
+        if (lastFromRow !== expectedFromRow) return null;
+        if (lastToRow !== expectedToRow) return null;
+        if (Math.abs(lastMove.to - lastMove.from) !== 16) return null;
+        if (pawnRow !== lastToRow) return null;
+        if (Math.abs(pawnCol - lastToCol) !== 1) return null;
+
+        const direction = currentTurn === "white" ? -1 : 1;
+        const target = (pawnRow + direction) * 8 + lastToCol;
+
+        if (board[target] !== "") return null;
+
+        return target;
+    }
+
+    static getEnPassantCapturePosition(board: Piece[], from: number, to: number, currentTurn: turn, history: Move[]): number | null {
+        const enPassantMove = GameRules.getEnPassantMove(board, from, currentTurn, history);
+        if (enPassantMove !== to) return null;
+
+        const lastMove = history[history.length - 1];
+        if (!lastMove) return null;
+
+        return lastMove.to;
     }
 
     private static isEmpty(board: Piece[], position: number): boolean {

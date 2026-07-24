@@ -54,7 +54,8 @@ export class Game {
         if (!this.legalMoves.includes(to)) return;
 
         const movingPiece = this.board[from];
-        const capturedPiece = this.board[to];
+        const enPassantCapturePosition = GameRules.getEnPassantCapturePosition(this.board, from, to, this.currentTurn, this.history);
+        const capturedPiece = enPassantCapturePosition === null ? this.board[to] : this.board[enPassantCapturePosition];
         if (movingPiece === "K" && from === 60 && to === 62) {
             this.makeMove(from, to);
             this.makeMove(63, 61);
@@ -67,6 +68,9 @@ export class Game {
         }else if (movingPiece === "k" && from === 4 && to === 2) {
             this.makeMove(from, to);
             this.makeMove(0, 3);
+        } else if (enPassantCapturePosition !== null) {
+            this.makeMove(from, to);
+            this.board[enPassantCapturePosition] = "";
         } else if (GameRules.isPromotionMove(movingPiece, to)){
             this.makeMove(from, to);
             this.board[to] = movingPiece === "P" ? "Q" : "q";
@@ -113,7 +117,7 @@ export class Game {
         return getPseudoLegalMoves(this.board,position);
     }
     getLegalMoves = (position: number) : number[] =>{
-        return GameRules.getLegalMoves(this.board, position, this.currentTurn, this.castlingRights);
+        return GameRules.getLegalMoves(this.board, position, this.currentTurn, this.castlingRights, this.history);
     }
     getPieceColor = (position : number): turn | null =>{
         const piece = this.board[position];
@@ -194,13 +198,13 @@ export class Game {
         return GameRules.isKingInCheck(this.board, color);
     }
     hasLegalMoves = (color: turn): boolean => {
-        return GameRules.hasLegalMoves(this.board, color, this.currentTurn, this.castlingRights);
+        return GameRules.hasLegalMoves(this.board, color, this.currentTurn, this.castlingRights, this.history);
     }
     checkmate = (color: turn): boolean => {
-        return GameRules.checkmate(this.board, color, this.currentTurn, this.castlingRights);
+        return GameRules.checkmate(this.board, color, this.currentTurn, this.castlingRights, this.history);
     }
     staleMate = (color: turn): boolean => {
-        return GameRules.staleMate(this.board, color, this.currentTurn, this.castlingRights);
+        return GameRules.staleMate(this.board, color, this.currentTurn, this.castlingRights, this.history);
     }
 
     // castling = (color: turn): boolean => {
