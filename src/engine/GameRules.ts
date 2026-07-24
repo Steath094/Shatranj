@@ -124,6 +124,24 @@ export class GameRules {
         return false;
     }
 
+    static fiftyMoveRule(history: Move[]): boolean {
+        let halfMoves = 0;
+
+        for (let index = history.length - 1; index >= 0; index--) {
+            const move = history[index];
+            const isPawnMove = move.piece === "P" || move.piece === "p";
+            const isCapture = move.captured !== "";
+
+            if (isPawnMove || isCapture) {
+                break;
+            }
+
+            halfMoves++;
+        }
+
+        return halfMoves >= 100;
+    }
+
     static canCastleKingSide(board: Piece[], color: turn, castlingRights: CastlingRights): boolean {
         if (!castlingRights[color].kingSide) return false;
 

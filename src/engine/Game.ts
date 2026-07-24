@@ -209,6 +209,9 @@ export class Game {
     insufficientMaterial = (): boolean => {
         return GameRules.insufficientMaterial(this.board);
     }
+    fiftyMoveRule = (): boolean => {
+        return GameRules.fiftyMoveRule(this.history);
+    }
 
     // castling = (color: turn): boolean => {
     //     if (!(this.castlingRights[color].kingSide || this.castlingRights[color].queenSide)) {
