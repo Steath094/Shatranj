@@ -212,6 +212,9 @@ export class Game {
     fiftyMoveRule = (): boolean => {
         return GameRules.fiftyMoveRule(this.history);
     }
+    threefoldRepetition = (): boolean => {
+        return GameRules.threefoldRepetition(this.history);
+    }
 
     // castling = (color: turn): boolean => {
     //     if (!(this.castlingRights[color].kingSide || this.castlingRights[color].queenSide)) {
