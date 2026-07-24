@@ -98,6 +98,32 @@ export class GameRules {
         return !GameRules.isKingInCheck(board, color) && !GameRules.hasLegalMoves(board, color, currentTurn, castlingRights, history);
     }
 
+    static insufficientMaterial(board: Piece[]): boolean {
+        const pieces = board
+            .map((piece, position) => ({ piece, position }))
+            .filter(({ piece }) => piece !== "");
+
+        const nonKingPieces = pieces.filter(({ piece }) => piece !== "K" && piece !== "k");
+
+        if (nonKingPieces.length === 0) return true;
+
+        for (const { piece } of nonKingPieces) {
+            if (piece === "P" || piece === "p" || piece === "R" || piece === "r" || piece === "Q" || piece === "q") {
+                return false;
+            }
+        }
+
+        if (nonKingPieces.length === 1) return true;
+
+        const bishops = nonKingPieces.filter(({ piece }) => piece === "B" || piece === "b");
+
+        if (nonKingPieces.length === 2 && bishops.length === 2) {
+            return GameRules.isLightSquare(bishops[0].position) === GameRules.isLightSquare(bishops[1].position);
+        }
+
+        return false;
+    }
+
     static canCastleKingSide(board: Piece[], color: turn, castlingRights: CastlingRights): boolean {
         if (!castlingRights[color].kingSide) return false;
 
@@ -236,6 +262,13 @@ export class GameRules {
 
     private static isEmpty(board: Piece[], position: number): boolean {
         return board[position] === "";
+    }
+
+    private static isLightSquare(position: number): boolean {
+        const row = Math.floor(position / 8);
+        const col = position % 8;
+
+        return (row + col) % 2 === 0;
     }
 
     private static getPieceColor(board: Piece[], position: number): turn | null {

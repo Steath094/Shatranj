@@ -206,6 +206,9 @@ export class Game {
     staleMate = (color: turn): boolean => {
         return GameRules.staleMate(this.board, color, this.currentTurn, this.castlingRights, this.history);
     }
+    insufficientMaterial = (): boolean => {
+        return GameRules.insufficientMaterial(this.board);
+    }
 
     // castling = (color: turn): boolean => {
     //     if (!(this.castlingRights[color].kingSide || this.castlingRights[color].queenSide)) {
