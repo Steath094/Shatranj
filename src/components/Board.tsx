@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Game } from "../engine/Game";
-import type { ClickResult, Move, turn } from "../types/chess";
+import type { GameSnapshot, Move, PromotionPiece, turn } from "../types/chess";
 import { ChessBoard } from "./ChessBoard";
 import { GameInfoPanel } from "./GameInfoPanel";
 import { GameOverPopup } from "./GameOverPopup";
@@ -12,10 +12,18 @@ type GameStatus = {
   isGameOver: boolean;
 };
 
-type PromotionNotice = {
+type PendingPromotion = {
   color: turn;
-  square: number;
+  from: number;
+  to: number;
+  choices: PromotionPiece[];
+  beforeMove: GameSnapshot;
 } | null;
+
+const promotionChoices: Record<turn, PromotionPiece[]> = {
+  white: ["Q", "R", "B", "N"],
+  black: ["q", "r", "b", "n"],
+};
 
 const getGameStatus = (game: Game): GameStatus => {
   const color = game.currentTurn;
@@ -76,60 +84,134 @@ const getGameStatus = (game: Game): GameStatus => {
   };
 };
 
-const getPromotionNotice = (game: Game, previousHistoryLength: number): PromotionNotice => {
-  if (game.history.length === previousHistoryLength) return null;
-
-  const lastMove = game.history[game.history.length - 1];
-  if (!lastMove) return null;
-
-  const promotedPiece = game.board[lastMove.to];
-
-  if (lastMove.piece === "P" && promotedPiece === "Q") {
-    return {
-      color: "white",
-      square: lastMove.to,
-    };
-  }
-
-  if (lastMove.piece === "p" && promotedPiece === "q") {
-    return {
-      color: "black",
-      square: lastMove.to,
-    };
-  }
-
-  return null;
-};
-
 function Board() {
   const [game, setGame] = useState(() => new Game());
   const [, setRevision] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
-  const [promotionNotice, setPromotionNotice] = useState<PromotionNotice>(null);
+  const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion>(null);
+  const [undoStack, setUndoStack] = useState<GameSnapshot[]>([]);
+  const [redoStack, setRedoStack] = useState<GameSnapshot[]>([]);
+  const [dismissedCheckmateAt, setDismissedCheckmateAt] = useState<number | null>(null);
 
   const lastMove: Move | null = game.history[game.history.length - 1] ?? null;
   const gameStatus = getGameStatus(game);
   const checkedKingSquare = game.isKingInCheck(game.currentTurn) ? game.findKing(game.currentTurn) : null;
+  const showCheckmatePopup = gameStatus.title === "Checkmate" && dismissedCheckmateAt !== game.history.length;
 
   const refresh = () => {
     setRevision((revision) => revision + 1);
   };
 
+  const selectSquare = (position: number) => {
+    game.selectSquare(position);
+    refresh();
+  };
+
+  const commitMove = (
+    from: number,
+    to: number,
+    promotionPiece?: PromotionPiece,
+    beforeMove = game.getSnapshot({ clearSelection: true }),
+  ) => {
+    const didCommit = game.commitMove(from, to, promotionPiece);
+
+    if (!didCommit) return;
+
+    game.clearSelection();
+    setUndoStack((history) => [...history, beforeMove]);
+    setRedoStack([]);
+    setPendingPromotion(null);
+    setDismissedCheckmateAt(null);
+    refresh();
+  };
+
   const handleSquareClick = (position: number) => {
-    if (gameStatus.isGameOver) return;
+    if (pendingPromotion || gameStatus.isGameOver) return;
 
-    const previousHistoryLength = game.history.length;
-    const result: ClickResult = game.handleSquareSelection(position);
+    if (game.selectedSquare === null) {
+      if (game.board[position] === "") return;
+      if (game.getPieceColor(position) !== game.currentTurn) return;
 
-    if (result.boardChanged || result.selectionChanged) {
-      setPromotionNotice(getPromotionNotice(game, previousHistoryLength));
-      refresh();
+      selectSquare(position);
+      return;
     }
+
+    if (game.getPieceColor(position) === game.currentTurn) {
+      selectSquare(position);
+      return;
+    }
+
+    if (!game.legalMoves.includes(position)) {
+      game.clearSelection();
+      refresh();
+      return;
+    }
+
+    const from = game.selectedSquare;
+    const beforeMove = game.getSnapshot({ clearSelection: true });
+
+    if (game.isPromotionMove(from, position)) {
+      const color = game.currentTurn;
+
+      game.clearSelection();
+      setPendingPromotion({
+        color,
+        from,
+        to: position,
+        choices: promotionChoices[color],
+        beforeMove,
+      });
+      refresh();
+      return;
+    }
+
+    commitMove(from, position, undefined, beforeMove);
+  };
+
+  const completePromotion = (piece: PromotionPiece) => {
+    if (!pendingPromotion) return;
+
+    commitMove(pendingPromotion.from, pendingPromotion.to, piece, pendingPromotion.beforeMove);
+  };
+
+  const cancelPromotion = () => {
+    setPendingPromotion(null);
+    game.clearSelection();
+    refresh();
+  };
+
+  const undoMove = () => {
+    if (undoStack.length === 0) return;
+
+    const previous = undoStack[undoStack.length - 1];
+    const current = game.getSnapshot({ clearSelection: true });
+
+    game.restoreSnapshot(previous);
+    setPendingPromotion(null);
+    setUndoStack(undoStack.slice(0, -1));
+    setRedoStack([...redoStack, current]);
+    refresh();
+  };
+
+  const redoMove = () => {
+    if (redoStack.length === 0) return;
+
+    const next = redoStack[redoStack.length - 1];
+    const current = game.getSnapshot({ clearSelection: true });
+
+    game.restoreSnapshot(next);
+    setPendingPromotion(null);
+    setUndoStack([...undoStack, current]);
+    setRedoStack(redoStack.slice(0, -1));
+    refresh();
   };
 
   const restartGame = () => {
     setGame(new Game());
-    setPromotionNotice(null);
+    setPendingPromotion(null);
+    setUndoStack([]);
+    setRedoStack([]);
+    setDismissedCheckmateAt(null);
   };
 
   return (
@@ -142,7 +224,7 @@ function Board() {
               <h1 className="text-2xl font-semibold text-stone-50 sm:text-3xl">Chess Engine</h1>
             </div>
             <div className="rounded border border-stone-600 bg-stone-800 px-3 py-2 text-sm text-stone-200">
-              {game.currentTurn === "white" ? "White" : "Black"} to move
+              {gameStatus.isGameOver ? gameStatus.title : `${game.currentTurn === "white" ? "White" : "Black"} to move`}
             </div>
           </div>
 
@@ -167,21 +249,29 @@ function Board() {
           isInsufficientMaterial={game.insufficientMaterial()}
           isFiftyMoveRule={game.fiftyMoveRule()}
           isThreefoldRepetition={game.threefoldRepetition()}
+          canUndo={undoStack.length > 0}
+          canRedo={redoStack.length > 0}
           onFlip={() => setIsFlipped((value) => !value)}
           onRestart={restartGame}
+          onUndo={undoMove}
+          onRedo={redoMove}
         />
       </div>
 
-      {promotionNotice && (
+      {pendingPromotion && (
         <PromotionPopup
-          notice={promotionNotice}
-          onClose={() => setPromotionNotice(null)}
+          color={pendingPromotion.color}
+          square={pendingPromotion.to}
+          choices={pendingPromotion.choices}
+          onPromote={completePromotion}
+          onCancel={cancelPromotion}
         />
       )}
 
-      {gameStatus.isGameOver && (
+      {showCheckmatePopup && (
         <GameOverPopup
           status={gameStatus}
+          onClose={() => setDismissedCheckmateAt(game.history.length)}
           onRestart={restartGame}
         />
       )}

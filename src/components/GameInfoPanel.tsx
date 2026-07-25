@@ -17,8 +17,12 @@ type GameInfoPanelProps = {
   isInsufficientMaterial: boolean;
   isFiftyMoveRule: boolean;
   isThreefoldRepetition: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
   onFlip: () => void;
   onRestart: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
 };
 
 const formatSquare = (position: number): string => {
@@ -31,7 +35,9 @@ const formatSquare = (position: number): string => {
 const formatMove = (move: Move | null): string => {
   if (!move) return "None";
 
-  return `${move.piece} ${formatSquare(move.from)}-${formatSquare(move.to)}`;
+  const promotion = move.promotion ? `=${move.promotion.toUpperCase()}` : "";
+
+  return `${move.piece} ${formatSquare(move.from)}-${formatSquare(move.to)}${promotion}`;
 };
 
 export function GameInfoPanel({
@@ -44,8 +50,12 @@ export function GameInfoPanel({
   isInsufficientMaterial,
   isFiftyMoveRule,
   isThreefoldRepetition,
+  canUndo,
+  canRedo,
   onFlip,
   onRestart,
+  onUndo,
+  onRedo,
 }: GameInfoPanelProps) {
   return (
     <aside className="w-full rounded border border-stone-700 bg-[#302e2b] p-4 shadow-xl shadow-black/20 lg:w-80">
@@ -81,6 +91,22 @@ export function GameInfoPanel({
       <CapturedPieces history={history} />
 
       <div className="mt-5 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          className="rounded border border-stone-600 px-3 py-2 text-sm font-semibold text-stone-100 transition hover:bg-stone-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
+          onClick={onUndo}
+          disabled={!canUndo}
+        >
+          Undo
+        </button>
+        <button
+          type="button"
+          className="rounded border border-stone-600 px-3 py-2 text-sm font-semibold text-stone-100 transition hover:bg-stone-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
+          onClick={onRedo}
+          disabled={!canRedo}
+        >
+          Redo
+        </button>
         <button
           type="button"
           className="rounded bg-stone-100 px-3 py-2 text-sm font-semibold text-stone-950 transition hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"

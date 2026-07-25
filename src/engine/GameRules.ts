@@ -370,7 +370,7 @@ export class GameRules {
         GameRules.movePiece(board, move.from, move.to);
 
         if (GameRules.isPromotionMove(move.piece, move.to)) {
-            board[move.to] = move.piece === "P" ? "Q" : "q";
+            board[move.to] = move.promotion ?? (move.piece === "P" ? "Q" : "q");
         }
     }
 

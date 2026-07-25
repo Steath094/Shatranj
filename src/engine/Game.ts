@@ -1,4 +1,4 @@
-import type { CastlingRights, ClickResult, Move, Piece, turn } from "../types/chess";
+import type { CastlingRights, ClickResult, GameSnapshot, Move, Piece, PromotionPiece, turn } from "../types/chess";
 import { GameRules } from "./GameRules";
 import { getPseudoLegalMoves } from "./moveGenerator";
 
@@ -43,6 +43,50 @@ export class Game {
             }
         }
     }
+    getSnapshot = (options?: { clearSelection?: boolean }): GameSnapshot => {
+        return {
+            board: [...this.board],
+            currentTurn: this.currentTurn,
+            history: this.history.map((move) => ({ ...move })),
+            selectedSquare: options?.clearSelection ? null : this.selectedSquare,
+            legalMoves: options?.clearSelection ? [] : [...this.legalMoves],
+            castlingRights: {
+                white: {
+                    kingSide: this.castlingRights.white.kingSide,
+                    queenSide: this.castlingRights.white.queenSide,
+                },
+                black: {
+                    kingSide: this.castlingRights.black.kingSide,
+                    queenSide: this.castlingRights.black.queenSide,
+                },
+            },
+        };
+    }
+    restoreSnapshot = (snapshot: GameSnapshot) => {
+        this.board = [...snapshot.board];
+        this.currentTurn = snapshot.currentTurn;
+        this.history = snapshot.history.map((move) => ({ ...move }));
+        this.selectedSquare = snapshot.selectedSquare;
+        this.legalMoves = [...snapshot.legalMoves];
+        this.castlingRights = {
+            white: {
+                kingSide: snapshot.castlingRights.white.kingSide,
+                queenSide: snapshot.castlingRights.white.queenSide,
+            },
+            black: {
+                kingSide: snapshot.castlingRights.black.kingSide,
+                queenSide: snapshot.castlingRights.black.queenSide,
+            },
+        };
+    }
+    clearSelection = () => {
+        this.selectedSquare = null;
+        this.legalMoves = [];
+    }
+    selectSquare = (position: number) => {
+        this.selectedSquare = position;
+        this.legalMoves = this.getLegalMoves(position);
+    }
     changeTurn = () => {
         if (this.currentTurn=="white") {
             this.currentTurn = "black";
@@ -50,12 +94,17 @@ export class Game {
             this.currentTurn = "white";
         }
     }
-    commitMove = (from: number, to: number) => {    
-        if (!this.legalMoves.includes(to)) return;
+    commitMove = (from: number, to: number, promotionPiece?: PromotionPiece): boolean => {    
+        if (this.getPieceColor(from) !== this.currentTurn) return false;
+        if (!this.getLegalMoves(from).includes(to)) return false;
 
         const movingPiece = this.board[from];
         const enPassantCapturePosition = GameRules.getEnPassantCapturePosition(this.board, from, to, this.currentTurn, this.history);
         const capturedPiece = enPassantCapturePosition === null ? this.board[to] : this.board[enPassantCapturePosition];
+        const promotion = GameRules.isPromotionMove(movingPiece, to)
+            ? this.getPromotionPiece(movingPiece, promotionPiece)
+            : undefined;
+
         if (movingPiece === "K" && from === 60 && to === 62) {
             this.makeMove(from, to);
             this.makeMove(63, 61);
@@ -71,18 +120,24 @@ export class Game {
         } else if (enPassantCapturePosition !== null) {
             this.makeMove(from, to);
             this.board[enPassantCapturePosition] = "";
-        } else if (GameRules.isPromotionMove(movingPiece, to)){
+        } else if (promotion !== undefined){
             this.makeMove(from, to);
-            this.board[to] = movingPiece === "P" ? "Q" : "q";
+            this.board[to] = promotion;
         } else this.makeMove(from,to);
 
         this.changeTurn();
-        this.history.push({
+        const move: Move = {
             from,
             to,
             piece: movingPiece,
             captured: capturedPiece,
-        })
+        };
+
+        if (promotion !== undefined) {
+            move.promotion = promotion;
+        }
+
+        this.history.push(move)
         if (movingPiece=="K") {
             this.castlingRights.white.kingSide=false;
             this.castlingRights.white.queenSide=false;
@@ -104,6 +159,20 @@ export class Game {
             this.castlingRights.white.kingSide=false;
         }
 
+        return true;
+    }
+    getPromotionPiece = (movingPiece: Piece, promotionPiece?: PromotionPiece): PromotionPiece => {
+        const fallback = movingPiece === "P" ? "Q" : "q";
+
+        if (promotionPiece === undefined) return fallback;
+
+        const isWhitePromotion = movingPiece === "P" && ["Q", "R", "B", "N"].includes(promotionPiece);
+        const isBlackPromotion = movingPiece === "p" && ["q", "r", "b", "n"].includes(promotionPiece);
+
+        return isWhitePromotion || isBlackPromotion ? promotionPiece : fallback;
+    }
+    isPromotionMove = (from: number, to: number): boolean => {
+        return GameRules.isPromotionMove(this.board[from], to);
     }
     makeMove = (from: number, to: number) => {
         this.board[to] = this.board[from];
