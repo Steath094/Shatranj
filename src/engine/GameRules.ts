@@ -1,8 +1,19 @@
-import type { CastlingRights, Move, Piece, turn } from "../types/chess";
+import type { CastlingRights, Move, Piece, Position, turn } from "../types/chess";
+import { applyMove, getEnPassantCapturePosition, getEnPassantMove, isPromotionMove } from "./MoveApplication";
 import { getPseudoLegalMoves } from "./moveGenerator";
 import { getPawnAttackSquares } from "./pawn";
 
 export class GameRules {
+    static getLegalMovesForPosition(position: Position, square: number): number[] {
+        return GameRules.getLegalMoves(
+            position.board,
+            square,
+            position.currentTurn,
+            position.castlingRights,
+            position.history,
+        );
+    }
+
     static getLegalMoves(board: Piece[], position: number, currentTurn: turn, castlingRights: CastlingRights, history: Move[]): number[] {
         const piece = board[position];
         const pseudoMoves = getPseudoLegalMoves(board, position);
@@ -21,10 +32,10 @@ export class GameRules {
         }
 
         if (piece === "P" || piece === "p") {
-            const enPassantMove = GameRules.getEnPassantMove(board, position, currentTurn, history);
+            const enPassantMove = getEnPassantMove(board, position, currentTurn, history);
             const capturedPawnPosition = enPassantMove === null
                 ? null
-                : GameRules.getEnPassantCapturePosition(board, position, enPassantMove, currentTurn, history);
+                : getEnPassantCapturePosition(board, position, enPassantMove, currentTurn, history);
 
             if (enPassantMove !== null && capturedPawnPosition !== null) {
                 const nextBoard = [...board];
@@ -143,14 +154,39 @@ export class GameRules {
     }
 
     static threefoldRepetition(history: Move[]): boolean {
-        const board = GameRules.getInitialBoard();
-        const castlingRights = GameRules.getInitialCastlingRights();
-        const replayedHistory: Move[] = [];
+        let position: Position = {
+            board: [
+                "r", "n", "b", "q", "k", "b", "n", "r",
+                "p", "p", "p", "p", "p", "p", "p", "p",
+                "", "", "", "", "", "", "", "",
+                "", "", "", "", "", "", "", "",
+                "", "", "", "", "", "", "", "",
+                "", "", "", "", "", "", "", "",
+                "P", "P", "P", "P", "P", "P", "P", "P",
+                "R", "N", "B", "Q", "K", "B", "N", "R",
+            ],
+            currentTurn: "white",
+            history: [],
+            castlingRights: {
+                white: {
+                    kingSide: true,
+                    queenSide: true,
+                },
+                black: {
+                    kingSide: true,
+                    queenSide: true,
+                },
+            },
+        };
         const positionCounts = new Map<string, number>();
-        let currentTurn: turn = "white";
 
         const countCurrentPosition = (): boolean => {
-            const positionKey = GameRules.getPositionKey(board, currentTurn, castlingRights, replayedHistory);
+            const positionKey = GameRules.getPositionKey(
+                position.board,
+                position.currentTurn,
+                position.castlingRights,
+                position.history,
+            );
             const count = (positionCounts.get(positionKey) ?? 0) + 1;
 
             positionCounts.set(positionKey, count);
@@ -161,10 +197,7 @@ export class GameRules {
         if (countCurrentPosition()) return true;
 
         for (const move of history) {
-            GameRules.applyHistoricalMove(board, move, currentTurn, replayedHistory);
-            GameRules.updateCastlingRights(castlingRights, move);
-            replayedHistory.push(move);
-            currentTurn = currentTurn === "white" ? "black" : "white";
+            position = applyMove(position, move);
 
             if (countCurrentPosition()) return true;
         }
@@ -260,146 +293,15 @@ export class GameRules {
     }
 
     static isPromotionMove(piece: Piece, to: number): boolean {
-        return (piece === "P" && to >= 0 && to < 8) || (piece === "p" && to >= 56 && to < 64);
+        return isPromotionMove(piece, to);
     }
 
     static getEnPassantMove(board: Piece[], position: number, currentTurn: turn, history: Move[]): number | null {
-        const piece = board[position];
-        const ownPawn = currentTurn === "white" ? "P" : "p";
-        const enemyPawn = currentTurn === "white" ? "p" : "P";
-
-        if (piece !== ownPawn) return null;
-
-        const lastMove = history[history.length - 1];
-        if (!lastMove) return null;
-        if (lastMove.piece !== enemyPawn) return null;
-        if (board[lastMove.to] !== enemyPawn) return null;
-
-        const lastFromRow = Math.floor(lastMove.from / 8);
-        const lastToRow = Math.floor(lastMove.to / 8);
-        const lastToCol = lastMove.to % 8;
-        const pawnRow = Math.floor(position / 8);
-        const pawnCol = position % 8;
-
-        const expectedFromRow = enemyPawn === "p" ? 1 : 6;
-        const expectedToRow = enemyPawn === "p" ? 3 : 4;
-
-        if (lastFromRow !== expectedFromRow) return null;
-        if (lastToRow !== expectedToRow) return null;
-        if (Math.abs(lastMove.to - lastMove.from) !== 16) return null;
-        if (pawnRow !== lastToRow) return null;
-        if (Math.abs(pawnCol - lastToCol) !== 1) return null;
-
-        const direction = currentTurn === "white" ? -1 : 1;
-        const target = (pawnRow + direction) * 8 + lastToCol;
-
-        if (board[target] !== "") return null;
-
-        return target;
+        return getEnPassantMove(board, position, currentTurn, history);
     }
 
     static getEnPassantCapturePosition(board: Piece[], from: number, to: number, currentTurn: turn, history: Move[]): number | null {
-        const enPassantMove = GameRules.getEnPassantMove(board, from, currentTurn, history);
-        if (enPassantMove !== to) return null;
-
-        const lastMove = history[history.length - 1];
-        if (!lastMove) return null;
-
-        return lastMove.to;
-    }
-
-    private static getInitialBoard(): Piece[] {
-        return [
-            "r", "n", "b", "q", "k", "b", "n", "r",
-            "p", "p", "p", "p", "p", "p", "p", "p",
-            "", "", "", "", "", "", "", "",
-            "", "", "", "", "", "", "", "",
-            "", "", "", "", "", "", "", "",
-            "", "", "", "", "", "", "", "",
-            "P", "P", "P", "P", "P", "P", "P", "P",
-            "R", "N", "B", "Q", "K", "B", "N", "R",
-        ];
-    }
-
-    private static getInitialCastlingRights(): CastlingRights {
-        return {
-            white: {
-                kingSide: true,
-                queenSide: true,
-            },
-            black: {
-                kingSide: true,
-                queenSide: true,
-            },
-        };
-    }
-
-    private static applyHistoricalMove(board: Piece[], move: Move, currentTurn: turn, history: Move[]): void {
-        const enPassantCapturePosition = GameRules.getEnPassantCapturePosition(board, move.from, move.to, currentTurn, history);
-
-        if (move.piece === "K" && move.from === 60 && move.to === 62) {
-            GameRules.movePiece(board, move.from, move.to);
-            GameRules.movePiece(board, 63, 61);
-            return;
-        }
-
-        if (move.piece === "K" && move.from === 60 && move.to === 58) {
-            GameRules.movePiece(board, move.from, move.to);
-            GameRules.movePiece(board, 56, 59);
-            return;
-        }
-
-        if (move.piece === "k" && move.from === 4 && move.to === 6) {
-            GameRules.movePiece(board, move.from, move.to);
-            GameRules.movePiece(board, 7, 5);
-            return;
-        }
-
-        if (move.piece === "k" && move.from === 4 && move.to === 2) {
-            GameRules.movePiece(board, move.from, move.to);
-            GameRules.movePiece(board, 0, 3);
-            return;
-        }
-
-        if (enPassantCapturePosition !== null) {
-            GameRules.movePiece(board, move.from, move.to);
-            board[enPassantCapturePosition] = "";
-            return;
-        }
-
-        GameRules.movePiece(board, move.from, move.to);
-
-        if (GameRules.isPromotionMove(move.piece, move.to)) {
-            board[move.to] = move.promotion ?? (move.piece === "P" ? "Q" : "q");
-        }
-    }
-
-    private static movePiece(board: Piece[], from: number, to: number): void {
-        board[to] = board[from];
-        board[from] = "";
-    }
-
-    private static updateCastlingRights(castlingRights: CastlingRights, move: Move): void {
-        if (move.piece == "K") {
-            castlingRights.white.kingSide = false;
-            castlingRights.white.queenSide = false;
-        }
-        if (move.piece == "k") {
-            castlingRights.black.kingSide = false;
-            castlingRights.black.queenSide = false;
-        }
-        if ((move.piece == "r" && move.from == 0) || (move.captured == "r" && move.to == 0)) {
-            castlingRights.black.queenSide = false;
-        }
-        if ((move.piece == "r" && move.from == 7) || (move.captured == "r" && move.to == 7)) {
-            castlingRights.black.kingSide = false;
-        }
-        if ((move.piece == "R" && move.from == 56) || (move.captured == "R" && move.to == 56)) {
-            castlingRights.white.queenSide = false;
-        }
-        if ((move.piece == "R" && move.from == 63) || (move.captured == "R" && move.to == 63)) {
-            castlingRights.white.kingSide = false;
-        }
+        return getEnPassantCapturePosition(board, from, to, currentTurn, history);
     }
 
     private static getPositionKey(board: Piece[], currentTurn: turn, castlingRights: CastlingRights, history: Move[]): string {
@@ -424,10 +326,10 @@ export class GameRules {
 
     private static getEnPassantTargetKey(board: Piece[], currentTurn: turn, history: Move[]): string {
         for (let position = 0; position < board.length; position++) {
-            const enPassantMove = GameRules.getEnPassantMove(board, position, currentTurn, history);
+            const enPassantMove = getEnPassantMove(board, position, currentTurn, history);
             const capturedPawnPosition = enPassantMove === null
                 ? null
-                : GameRules.getEnPassantCapturePosition(board, position, enPassantMove, currentTurn, history);
+                : getEnPassantCapturePosition(board, position, enPassantMove, currentTurn, history);
 
             if (enPassantMove !== null && capturedPawnPosition !== null) {
                 const nextBoard = [...board];

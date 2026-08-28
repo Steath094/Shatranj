@@ -58,3 +58,10 @@ export type GameSnapshot = {
     legalMoves: number[];
     castlingRights: CastlingRights;
 };
+
+export type Position = {
+    board: Piece[];
+    currentTurn: turn;
+    history: Move[];
+    castlingRights: CastlingRights;
+};

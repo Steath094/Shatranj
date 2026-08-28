@@ -1,75 +1,290 @@
-# React + TypeScript + Vite
+# Shatranj
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Shatranj is a browser-based chess game built with React, TypeScript, Vite, and Tailwind CSS. The project currently includes a playable chessboard, a custom chess rules engine, move highlighting, promotion handling, game status detection, undo/redo, board flipping, captured-piece tracking, and a basic Docker setup for running the app.
 
-Currently, two official plugins are available:
+The engine has been refactored so the core chess state can be used independently from the React UI. This prepares the project for a future Minimax or Alpha-Beta AI without adding AI logic yet.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Current Build Summary
 
-## React Compiler
+The app opens directly into the chess experience. `src/App.tsx` renders the main `Board` component, which owns the game state and coordinates the engine, board UI, side panel, promotion popup, and game-over popup.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The chessboard is rendered as an 8x8 grid from a 64-position array. Each square knows its board index, displayed rank/file coordinate, piece, selection state, legal-move state, last-move state, and check state. Pieces are shown using SVG assets from `public/`.
 
-## Expanding the ESLint configuration
+The side panel shows the current status of the game, the side to move, the last move, board orientation, rule-state indicators, captured pieces, and controls for undo, redo, restart, and flip.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Implemented Gameplay
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- Standard initial chess position.
+- White and Black turn management.
+- Click-to-select and click-to-move interaction.
+- Legal move highlighting.
+- Capture highlighting.
+- Last move highlighting.
+- King-in-check highlighting.
+- Board coordinates.
+- Board flip between White-side and Black-side views.
+- Captured pieces grouped by the side that captured them.
+- Undo and redo through full game snapshots.
+- Restart game.
+- Pawn promotion with a choice of queen, rook, bishop, or knight.
+- Checkmate popup with close and restart actions.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Chess Engine Overview
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+The engine lives in `src/engine/` and is intentionally custom rather than using an external chess library. The board is represented as a flat `Piece[]` array with 64 entries:
 
+- Index `0` is `a8`.
+- Index `7` is `h8`.
+- Index `56` is `a1`.
+- Index `63` is `h1`.
+- Uppercase pieces are White: `P`, `R`, `N`, `B`, `Q`, `K`.
+- Lowercase pieces are Black: `p`, `r`, `n`, `b`, `q`, `k`.
+- Empty squares are represented by an empty string.
+
+The reusable engine-state abstraction is `Position`. It contains only the state needed to analyze and advance a chess game:
+
+- `board`
+- `currentTurn`
+- `history`
+- `castlingRights`
+
+It intentionally does not contain UI-only state such as selected square or highlighted legal moves.
+
+`Position` helpers live in `src/engine/Position.ts`:
+
+- `createInitialPosition()`: creates a fresh starting position.
+- `clonePosition(position)`: deep-copies board, history, and castling rights.
+- `getLegalMoves(position, square)`: gets legal target squares for one piece.
+- `getAllLegalMoves(position)`: returns every legal move for the side to move.
+
+The main gameplay facade is `Game` in `src/engine/Game.ts`. It stores:
+
+- `board`: the current 64-square position.
+- `currentTurn`: `"white"` or `"black"`.
+- `history`: committed moves.
+- `selectedSquare`: the currently selected square.
+- `legalMoves`: currently highlighted legal moves.
+- `castlingRights`: king-side and queen-side rights for both colors.
+
+`Game` is the stateful layer used by the UI. It exposes methods for selecting squares, committing real moves, changing turns, checking game status, restoring snapshots, and asking the rules layer for legal moves.
+
+`Game.getPosition()` returns a cloned `Position`, so external callers cannot accidentally mutate the live game:
+
+```ts
+const position = game.getPosition();
+
+position.board[0] = "Q"; // does not modify game.board[0]
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## AI-Ready Position Flow
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+The current architecture is:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```text
+React UI
+  -> Game
+      -> Position
+          -> GameRules
+          -> MoveApplication
+              -> Move generation
 ```
+
+Future AI code should be able to work from `Position` directly:
+
+```ts
+import { applyMove } from "./engine/MoveApplication";
+import { getAllLegalMoves } from "./engine/Position";
+
+const moves = getAllLegalMoves(position);
+const nextPosition = applyMove(position, moves[0]);
+```
+
+`applyMove(position, move)` returns a new `Position` and does not mutate the input position. This is the key behavior needed for future search trees, where many hypothetical branches must be explored independently.
+
+No Minimax, Alpha-Beta pruning, evaluation function, move ordering, or computer-player UI has been added yet.
+
+## Move Generation
+
+Move generation is split into two layers:
+
+1. Pseudo-legal moves
+2. Fully legal moves
+
+Pseudo-legal moves are generated by `src/engine/moveGenerator.ts`, which delegates to one file per piece:
+
+- `pawn.ts`
+- `knight.ts`
+- `bishop.ts`
+- `rook.ts`
+- `queen.ts`
+- `king.ts`
+
+Pseudo-legal moves understand how each piece moves and captures, but they do not by themselves guarantee that the king remains safe.
+
+Sliding pieces share the `traceDirections` helper in `src/engine/traceDirection.ts`. Bishops, rooks, and queens pass directional vectors into this helper. It walks square by square until it reaches the edge of the board, an own piece, or an enemy piece that can be captured.
+
+The knight and king generators calculate fixed target offsets and reject out-of-board squares. Pawns support single pushes, starting double pushes, diagonal captures, and separate pawn attack-square calculation for check detection.
+
+## Legal Move Filtering
+
+`GameRules.getLegalMoves` in `src/engine/GameRules.ts` converts pseudo-legal moves into legal moves.
+
+For each pseudo-legal move, it creates a temporary board, applies the move, and checks whether the moving side's king would still be in check. If the king is safe, the move is allowed.
+
+This means pinned pieces, illegal king moves, and moves that fail to resolve check are filtered out by the rules layer rather than by each individual piece generator.
+
+## Move Application
+
+Move application lives in `src/engine/MoveApplication.ts`. It is the single engine-level path for advancing a position.
+
+Important exports:
+
+- `createMove(position, from, to, promotionPiece?)`: builds a `Move` object with the moving piece, captured piece, and optional promotion.
+- `applyMove(position, move)`: returns the next immutable `Position`.
+- `updateCastlingRights(castlingRights, move)`: returns updated castling rights after king moves, rook moves, or rook captures.
+- `getEnPassantMove(...)` and `getEnPassantCapturePosition(...)`: preserve the existing history-based en passant behavior.
+- `isPromotionMove(...)` and `getPromotionPiece(...)`: preserve promotion detection and queen fallback behavior.
+
+`Game.commitMove()` now validates the real UI move, creates a current `Position`, builds a `Move`, applies it through `applyMove`, and copies the resulting position back into the live game facade.
+
+## Special Rules
+
+The engine currently supports these special chess rules:
+
+- Castling
+- En passant
+- Pawn promotion
+- Check
+- Checkmate
+- Stalemate
+- Insufficient material draw
+- Fifty-move rule draw
+- Threefold repetition draw
+
+### Castling
+
+Castling rights are tracked separately for White and Black, king-side and queen-side. Rights are removed when a king moves, when a rook moves from its original square, or when a rook is captured on its original square.
+
+The rules layer checks that:
+
+- The side still has the relevant castling right.
+- The king is on its original square.
+- The rook is on its original square.
+- The squares between the king and rook are empty.
+- The king is not currently in check.
+- The king does not pass through or land on an attacked square.
+
+When castling is committed, `Game.commitMove` moves both the king and rook.
+
+### En Passant
+
+En passant is derived from the latest move in history. The rules layer verifies that the previous move was an enemy pawn double-step from its starting rank, that the current pawn is adjacent to it, and that the target square is empty.
+
+The legal-move filter also simulates the en passant capture and removes the captured pawn from the temporary board before checking king safety.
+
+### Promotion
+
+The game detects promotion when a White pawn reaches rank 8 or a Black pawn reaches rank 1. The UI pauses the move and opens `PromotionPopup`, allowing the user to choose queen, rook, bishop, or knight.
+
+If no valid promotion piece is supplied, the engine falls back to queen promotion.
+
+## Game-End Detection
+
+The `Board` component computes the current game status after each move using the `Game` API.
+
+Current statuses include:
+
+- `Playing`
+- `Check`
+- `Checkmate`
+- `Stalemate`
+- `Draw`
+
+Draw detection includes insufficient material, fifty-move rule, and threefold repetition.
+
+Threefold repetition is calculated by replaying the move history from the initial position, rebuilding castling rights, tracking whose turn it is, and counting equivalent position keys. The position key includes the board, current turn, castling rights, and legal en passant target.
+
+## UI Components
+
+Important components:
+
+- `Board.tsx`: main game coordinator and state owner.
+- `ChessBoard.tsx`: renders the 8x8 grid.
+- `ChessSquare.tsx`: renders one square, including coordinates and visual states.
+- `PieceImage.tsx`: maps piece codes to SVG piece assets.
+- `GameInfoPanel.tsx`: side panel with status, controls, and game metadata.
+- `CapturedPieces.tsx`: captured-piece display.
+- `PromotionPopup.tsx`: promotion choice modal.
+- `GameOverPopup.tsx`: checkmate modal.
+
+## Tech Stack
+
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS
+- ESLint
+- Docker
+
+## Scripts
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Start the development server:
+
+```bash
+npm run dev
+```
+
+Build for production:
+
+```bash
+npm run build
+```
+
+Run linting:
+
+```bash
+npm run lint
+```
+
+Preview the production build:
+
+```bash
+npm run preview
+```
+
+On Windows PowerShell, if `npm` is blocked by script execution policy, use:
+
+```bash
+npm.cmd run build
+```
+
+## Docker
+
+The current `DockerFile` uses `node:22-alpine`, installs dependencies, exposes port `5173`, and starts the Vite dev server with host binding:
+
+```bash
+docker build -t shatranj .
+docker run -p 5173:5173 shatranj
+```
+
+## Current Verification
+
+The project currently builds successfully with:
+
+```bash
+npm.cmd run build
+```
+
+## Known Next Steps
+
+- Replace the default Vite metadata and polish project branding.
+- Add automated tests for engine rules, especially castling, en passant, promotion, checkmate, stalemate, and repetition.
+- Add algebraic or PGN-style move notation instead of the current simple move format.
+- Consider adding timers, captured material score, move list navigation, and player names.
+- Improve Docker for production serving instead of only running the Vite dev server.

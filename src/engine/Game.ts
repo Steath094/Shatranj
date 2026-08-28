@@ -1,5 +1,7 @@
-import type { CastlingRights, ClickResult, GameSnapshot, Move, Piece, PromotionPiece, turn } from "../types/chess";
+import type { CastlingRights, ClickResult, GameSnapshot, Move, Piece, Position, PromotionPiece, turn } from "../types/chess";
 import { GameRules } from "./GameRules";
+import { applyMove, createMove, getPromotionPiece } from "./MoveApplication";
+import { clonePosition, createInitialPosition } from "./Position";
 import { getPseudoLegalMoves } from "./moveGenerator";
 
 export class Game {
@@ -10,38 +12,29 @@ export class Game {
     legalMoves: number[];
     castlingRights: CastlingRights;
     constructor() {
-        this.board = [
-          // Rank 8 (Black back rank)
-          "r","n","b","q","k","b","n","r",
-          // Rank 7 (Black pawns)
-          "p","p","p","p","p","p","p","p",
-          // Rank 6 (Empty)
-          "","","","","","","","",
-          // Rank 5 (Empty)
-          "","","","","","","","",
-          // Rank 4 (Empty)
-          "","","","","","","","",
-          // Rank 3 (Empty)
-          "","","","","","","","",
-          // Rank 2 (White pawns)
-          "P","P","P","P","P","P","P","P",
-          // Rank 1 (White back rank)
-          "R","N","B","Q","K","B","N","R",
-        ];
-        this.currentTurn = "white";
-        this.history = [];
+        const position = createInitialPosition();
+        this.board = position.board;
+        this.currentTurn = position.currentTurn;
+        this.history = position.history;
         this.selectedSquare = null;
         this.legalMoves = [];
-        this.castlingRights = {
-            white: {
-                kingSide: true,
-                queenSide: true,
-            },
-            black: {
-                kingSide: true,
-                queenSide: true,
-            }
-        }
+        this.castlingRights = position.castlingRights;
+    }
+    getPosition = (): Position => {
+        return clonePosition({
+            board: this.board,
+            currentTurn: this.currentTurn,
+            history: this.history,
+            castlingRights: this.castlingRights,
+        });
+    }
+    private setPosition = (position: Position) => {
+        const nextPosition = clonePosition(position);
+
+        this.board = nextPosition.board;
+        this.currentTurn = nextPosition.currentTurn;
+        this.history = nextPosition.history;
+        this.castlingRights = nextPosition.castlingRights;
     }
     getSnapshot = (options?: { clearSelection?: boolean }): GameSnapshot => {
         return {
@@ -98,78 +91,17 @@ export class Game {
         if (this.getPieceColor(from) !== this.currentTurn) return false;
         if (!this.getLegalMoves(from).includes(to)) return false;
 
-        const movingPiece = this.board[from];
-        const enPassantCapturePosition = GameRules.getEnPassantCapturePosition(this.board, from, to, this.currentTurn, this.history);
-        const capturedPiece = enPassantCapturePosition === null ? this.board[to] : this.board[enPassantCapturePosition];
-        const promotion = GameRules.isPromotionMove(movingPiece, to)
-            ? this.getPromotionPiece(movingPiece, promotionPiece)
-            : undefined;
+        const position = this.getPosition();
+        const move = createMove(position, from, to, promotionPiece);
 
-        if (movingPiece === "K" && from === 60 && to === 62) {
-            this.makeMove(from, to);
-            this.makeMove(63, 61);
-        }else if (movingPiece === "K" && from === 60 && to === 58) {
-            this.makeMove(from, to);
-            this.makeMove(56, 59);
-        }else if (movingPiece === "k" && from === 4 && to === 6) {
-            this.makeMove(from, to);
-            this.makeMove(7, 5);
-        }else if (movingPiece === "k" && from === 4 && to === 2) {
-            this.makeMove(from, to);
-            this.makeMove(0, 3);
-        } else if (enPassantCapturePosition !== null) {
-            this.makeMove(from, to);
-            this.board[enPassantCapturePosition] = "";
-        } else if (promotion !== undefined){
-            this.makeMove(from, to);
-            this.board[to] = promotion;
-        } else this.makeMove(from,to);
+        if (move === null) return false;
 
-        this.changeTurn();
-        const move: Move = {
-            from,
-            to,
-            piece: movingPiece,
-            captured: capturedPiece,
-        };
-
-        if (promotion !== undefined) {
-            move.promotion = promotion;
-        }
-
-        this.history.push(move)
-        if (movingPiece=="K") {
-            this.castlingRights.white.kingSide=false;
-            this.castlingRights.white.queenSide=false;
-        }
-        if (movingPiece=="k") {
-            this.castlingRights.black.kingSide=false;
-            this.castlingRights.black.queenSide=false;
-        }
-        if ((movingPiece=="r" && from==0) || (capturedPiece=="r" && to==0)) {
-            this.castlingRights.black.queenSide=false;
-        }
-        if ((movingPiece=="r" && from==7) || (capturedPiece=="r" && to==7)) {
-            this.castlingRights.black.kingSide=false;
-        }
-        if ((movingPiece=="R" && from==56) || (capturedPiece=="R" && to==56)) {
-            this.castlingRights.white.queenSide=false;
-        }
-        if ((movingPiece=="R" && from==63) || (capturedPiece=="R" && to==63)) {
-            this.castlingRights.white.kingSide=false;
-        }
+        this.setPosition(applyMove(position, move));
 
         return true;
     }
     getPromotionPiece = (movingPiece: Piece, promotionPiece?: PromotionPiece): PromotionPiece => {
-        const fallback = movingPiece === "P" ? "Q" : "q";
-
-        if (promotionPiece === undefined) return fallback;
-
-        const isWhitePromotion = movingPiece === "P" && ["Q", "R", "B", "N"].includes(promotionPiece);
-        const isBlackPromotion = movingPiece === "p" && ["q", "r", "b", "n"].includes(promotionPiece);
-
-        return isWhitePromotion || isBlackPromotion ? promotionPiece : fallback;
+        return getPromotionPiece(movingPiece, promotionPiece);
     }
     isPromotionMove = (from: number, to: number): boolean => {
         return GameRules.isPromotionMove(this.board[from], to);
