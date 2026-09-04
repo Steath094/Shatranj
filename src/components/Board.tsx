@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { AI_CONFIG, findBestMove } from "../engine/AI/findBestMove";
 import { Game } from "../engine/Game";
-import type { GameSnapshot, Move, PromotionPiece, turn } from "../types/chess";
+import type { GameMode, GameSnapshot, Move, PromotionPiece, turn } from "../types/chess";
 import { ChessBoard } from "./ChessBoard";
 import { GameInfoPanel } from "./GameInfoPanel";
 import { GameOverPopup } from "./GameOverPopup";
@@ -84,7 +85,12 @@ const getGameStatus = (game: Game): GameStatus => {
   };
 };
 
-function Board() {
+type BoardProps = {
+  gameMode: GameMode;
+  onReturnToMenu: () => void;
+};
+
+function Board({ gameMode, onReturnToMenu }: BoardProps) {
   const [game, setGame] = useState(() => new Game());
   const [, setRevision] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -92,11 +98,21 @@ function Board() {
   const [undoStack, setUndoStack] = useState<GameSnapshot[]>([]);
   const [redoStack, setRedoStack] = useState<GameSnapshot[]>([]);
   const [dismissedCheckmateAt, setDismissedCheckmateAt] = useState<number | null>(null);
+  const [botThinking, setBotThinking] = useState(false);
+  const botRequestId = useRef(0);
 
   const lastMove: Move | null = game.history[game.history.length - 1] ?? null;
   const gameStatus = getGameStatus(game);
+  const isBotTurn = gameMode === "bot-easy" && game.currentTurn === "black" && !gameStatus.isGameOver;
   const checkedKingSquare = game.isKingInCheck(game.currentTurn) ? game.findKing(game.currentTurn) : null;
   const showCheckmatePopup = gameStatus.title === "Checkmate" && dismissedCheckmateAt !== game.history.length;
+  const effectiveStatus = botThinking && isBotTurn
+    ? {
+        title: "Bot is thinking...",
+        detail: "Black is calculating a move.",
+        isGameOver: false,
+      }
+    : gameStatus;
 
   const refresh = () => {
     setRevision((revision) => revision + 1);
@@ -123,10 +139,14 @@ function Board() {
     setPendingPromotion(null);
     setDismissedCheckmateAt(null);
     refresh();
+
+    if (gameMode === "bot-easy" && game.currentTurn === "black") {
+      triggerBotTurn();
+    }
   };
 
   const handleSquareClick = (position: number) => {
-    if (pendingPromotion || gameStatus.isGameOver) return;
+    if (pendingPromotion || gameStatus.isGameOver || (gameMode === "bot-easy" && game.currentTurn === "black")) return;
 
     if (game.selectedSquare === null) {
       if (game.board[position] === "") return;
@@ -207,11 +227,47 @@ function Board() {
   };
 
   const restartGame = () => {
+    botRequestId.current += 1;
+    setBotThinking(false);
     setGame(new Game());
     setPendingPromotion(null);
     setUndoStack([]);
     setRedoStack([]);
     setDismissedCheckmateAt(null);
+  };
+
+  const triggerBotTurn = () => {
+    if (gameMode !== "bot-easy" || botThinking || pendingPromotion) return;
+    if (game.currentTurn !== "black" || gameStatus.isGameOver) return;
+
+    const requestId = ++botRequestId.current;
+    setBotThinking(true);
+
+    window.setTimeout(() => {
+      if (requestId !== botRequestId.current) return;
+
+      const move = findBestMove(game.getPosition(), AI_CONFIG.easy.depth);
+
+      if (!move) {
+        setBotThinking(false);
+        return;
+      }
+
+      const beforeMove = game.getSnapshot({ clearSelection: true });
+      const didApply = game.applyMove(move);
+
+      if (!didApply) {
+        setBotThinking(false);
+        return;
+      }
+
+      game.clearSelection();
+      setUndoStack((history) => [...history, beforeMove]);
+      setRedoStack([]);
+      setDismissedCheckmateAt(null);
+      setBotThinking(false);
+      refresh();
+    }, 550);
   };
 
   return (
@@ -223,8 +279,17 @@ function Board() {
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">Shatranj</p>
               <h1 className="text-2xl font-semibold text-stone-50 sm:text-3xl">Chess Engine</h1>
             </div>
-            <div className="rounded border border-stone-600 bg-stone-800 px-3 py-2 text-sm text-stone-200">
-              {gameStatus.isGameOver ? gameStatus.title : `${game.currentTurn === "white" ? "White" : "Black"} to move`}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded border border-stone-600 bg-stone-800 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-stone-200 transition hover:border-amber-300 hover:bg-stone-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
+                onClick={onReturnToMenu}
+              >
+                Mode Select
+              </button>
+              <div className="rounded border border-stone-600 bg-stone-800 px-3 py-2 text-sm text-stone-200">
+                {effectiveStatus.isGameOver ? effectiveStatus.title : `${game.currentTurn === "white" ? "White" : "Black"} to move`}
+              </div>
             </div>
           </div>
 
@@ -242,7 +307,7 @@ function Board() {
         <GameInfoPanel
           currentTurn={game.currentTurn}
           history={game.history}
-          status={gameStatus}
+          status={effectiveStatus}
           lastMove={lastMove}
           isFlipped={isFlipped}
           isCheck={checkedKingSquare !== null}
@@ -270,7 +335,7 @@ function Board() {
 
       {showCheckmatePopup && (
         <GameOverPopup
-          status={gameStatus}
+          status={effectiveStatus}
           onClose={() => setDismissedCheckmateAt(game.history.length)}
           onRestart={restartGame}
         />

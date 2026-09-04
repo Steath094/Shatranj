@@ -65,3 +65,5 @@ export type Position = {
     history: Move[];
     castlingRights: CastlingRights;
 };
+
+export type GameMode = "bot-easy" | "friend";

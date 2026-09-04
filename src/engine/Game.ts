@@ -1,6 +1,6 @@
-import type { CastlingRights, ClickResult, GameSnapshot, Move, Piece, Position, PromotionPiece, turn } from "../types/chess";
+import type { CastlingRights, ClickResult, GameSnapshot, Move, Piece, Position, PromotionPiece, turn } from "../types/chess.ts";
 import { GameRules } from "./GameRules";
-import { applyMove, createMove, getPromotionPiece } from "./MoveApplication";
+import { applyMove as applyPositionMove, createMove, getPromotionPiece } from "./MoveApplication";
 import { clonePosition, createInitialPosition } from "./Position";
 import { getPseudoLegalMoves } from "./moveGenerator";
 
@@ -87,6 +87,11 @@ export class Game {
             this.currentTurn = "white";
         }
     }
+    applyMove = (move: Move): boolean => {
+        const position = this.getPosition();
+        this.setPosition(applyPositionMove(position, move));
+        return true;
+    }
     commitMove = (from: number, to: number, promotionPiece?: PromotionPiece): boolean => {    
         if (this.getPieceColor(from) !== this.currentTurn) return false;
         if (!this.getLegalMoves(from).includes(to)) return false;
@@ -96,9 +101,7 @@ export class Game {
 
         if (move === null) return false;
 
-        this.setPosition(applyMove(position, move));
-
-        return true;
+        return this.applyMove(move);
     }
     getPromotionPiece = (movingPiece: Piece, promotionPiece?: PromotionPiece): PromotionPiece => {
         return getPromotionPiece(movingPiece, promotionPiece);
