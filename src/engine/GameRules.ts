@@ -154,55 +154,26 @@ export class GameRules {
     }
 
     static threefoldRepetition(history: Move[]): boolean {
-        let position: Position = {
-            board: [
-                "r", "n", "b", "q", "k", "b", "n", "r",
-                "p", "p", "p", "p", "p", "p", "p", "p",
-                "", "", "", "", "", "", "", "",
-                "", "", "", "", "", "", "", "",
-                "", "", "", "", "", "", "", "",
-                "", "", "", "", "", "", "", "",
-                "P", "P", "P", "P", "P", "P", "P", "P",
-                "R", "N", "B", "Q", "K", "B", "N", "R",
-            ],
-            currentTurn: "white",
-            history: [],
-            castlingRights: {
-                white: {
-                    kingSide: true,
-                    queenSide: true,
-                },
-                black: {
-                    kingSide: true,
-                    queenSide: true,
-                },
-            },
-        };
+        const positions = GameRules.getPositionHistory(history);
         const positionCounts = new Map<string, number>();
 
-        const countCurrentPosition = (): boolean => {
-            const positionKey = GameRules.getPositionKey(
-                position.board,
-                position.currentTurn,
-                position.castlingRights,
-                position.history,
-            );
+        for (const position of positions) {
+            const positionKey = GameRules.getPositionKey(position);
             const count = (positionCounts.get(positionKey) ?? 0) + 1;
 
             positionCounts.set(positionKey, count);
 
-            return count >= 3;
-        };
-
-        if (countCurrentPosition()) return true;
-
-        for (const move of history) {
-            position = applyMove(position, move);
-
-            if (countCurrentPosition()) return true;
+            if (count >= 3) return true;
         }
 
         return false;
+    }
+
+    static getPositionRepetitionCount(position: Position): number {
+        const targetKey = GameRules.getPositionKey(position);
+        return GameRules.getPositionHistory(position.history)
+            .filter((historicalPosition) => GameRules.getPositionKey(historicalPosition) === targetKey)
+            .length;
     }
 
     static canCastleKingSide(board: Piece[], color: turn, castlingRights: CastlingRights): boolean {
@@ -304,13 +275,42 @@ export class GameRules {
         return getEnPassantCapturePosition(board, from, to, currentTurn, history);
     }
 
-    private static getPositionKey(board: Piece[], currentTurn: turn, castlingRights: CastlingRights, history: Move[]): string {
+    private static getPositionKey(position: Position): string {
         return [
-            board.join(","),
-            currentTurn,
-            GameRules.getCastlingRightsKey(castlingRights),
-            GameRules.getEnPassantTargetKey(board, currentTurn, history),
+            position.board.join(","),
+            position.currentTurn,
+            GameRules.getCastlingRightsKey(position.castlingRights),
+            GameRules.getEnPassantTargetKey(position.board, position.currentTurn, position.history),
         ].join("|");
+    }
+
+    private static getPositionHistory(history: Move[]): Position[] {
+        let position: Position = {
+            board: [
+                "r", "n", "b", "q", "k", "b", "n", "r",
+                "p", "p", "p", "p", "p", "p", "p", "p",
+                "", "", "", "", "", "", "", "",
+                "", "", "", "", "", "", "", "",
+                "", "", "", "", "", "", "", "",
+                "", "", "", "", "", "", "", "",
+                "P", "P", "P", "P", "P", "P", "P", "P",
+                "R", "N", "B", "Q", "K", "B", "N", "R",
+            ],
+            currentTurn: "white",
+            history: [],
+            castlingRights: {
+                white: { kingSide: true, queenSide: true },
+                black: { kingSide: true, queenSide: true },
+            },
+        };
+        const positions = [position];
+
+        for (const move of history) {
+            position = applyMove(position, move);
+            positions.push(position);
+        }
+
+        return positions;
     }
 
     private static getCastlingRightsKey(castlingRights: CastlingRights): string {

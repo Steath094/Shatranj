@@ -66,4 +66,4 @@ export type Position = {
     castlingRights: CastlingRights;
 };
 
-export type GameMode = "bot-easy" | "friend";
+export type GameMode = "bot-easy" | "bot-medium" | "friend";

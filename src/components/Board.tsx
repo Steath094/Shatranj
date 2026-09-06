@@ -109,7 +109,8 @@ function Board({ gameMode, onReturnToMenu }: BoardProps) {
 
   const lastMove: Move | null = game.history[game.history.length - 1] ?? null;
   const gameStatus = getGameStatus(game);
-  const isBotTurn = gameMode === "bot-easy" && game.currentTurn === "black" && !gameStatus.isGameOver;
+  const isBotGame = gameMode === "bot-easy" || gameMode === "bot-medium";
+  const isBotTurn = isBotGame && game.currentTurn === "black" && !gameStatus.isGameOver;
   const checkedKingSquare = game.isKingInCheck(game.currentTurn) ? game.findKing(game.currentTurn) : null;
   const showCheckmatePopup = gameStatus.title === "Checkmate" && dismissedCheckmateAt !== game.history.length;
   const controlsLocked = botThinking || isBotTurn;
@@ -149,7 +150,7 @@ function Board({ gameMode, onReturnToMenu }: BoardProps) {
   };
 
   const handleSquareClick = (position: number) => {
-    if (controlsLocked || pendingPromotion || gameStatus.isGameOver || (gameMode === "bot-easy" && game.currentTurn === "black")) return;
+    if (controlsLocked || pendingPromotion || gameStatus.isGameOver || (isBotGame && game.currentTurn === "black")) return;
 
     if (game.selectedSquare === null) {
       if (game.board[position] === "") return;
@@ -208,7 +209,7 @@ function Board({ gameMode, onReturnToMenu }: BoardProps) {
     if (undoStack.length === 0) return;
 
     const current = game.getSnapshot({ clearSelection: true });
-    const undoCount = gameMode === "bot-easy" && game.currentTurn === "white" && undoStack.length >= 2
+    const undoCount = isBotGame && game.currentTurn === "white" && undoStack.length >= 2
       ? 2
       : 1;
     const previous = undoStack[undoStack.length - undoCount];
@@ -247,7 +248,7 @@ function Board({ gameMode, onReturnToMenu }: BoardProps) {
   };
 
   useEffect(() => {
-    if (gameMode !== "bot-easy" || botThinkingRef.current || pendingPromotion) return;
+    if (!isBotGame || botThinkingRef.current || pendingPromotion) return;
     if (game.currentTurn !== "black" || gameStatus.isGameOver) return;
 
     const requestId = ++botRequestId.current;
@@ -271,7 +272,8 @@ function Board({ gameMode, onReturnToMenu }: BoardProps) {
         return;
       }
 
-      const move = findBestMove(position, AI_CONFIG.easy.depth);
+      const config = gameMode === "bot-medium" ? AI_CONFIG.medium : AI_CONFIG.easy;
+      const move = findBestMove(position, config.depth, config.algorithm);
 
       if (!move) {
         botThinkingRef.current = false;
@@ -296,7 +298,7 @@ function Board({ gameMode, onReturnToMenu }: BoardProps) {
       setBotThinking(false);
       refresh();
     }, 550);
-  }, [game, gameMode, gameStatus.isGameOver, pendingPromotion, revision]);
+  }, [game, gameMode, gameStatus.isGameOver, isBotGame, pendingPromotion, revision]);
 
   return (
     <main className="min-h-screen bg-[#262421] px-4 py-4 text-stone-100 sm:px-6 lg:px-8">

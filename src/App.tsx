@@ -4,7 +4,8 @@ import Board from './components/Board'
 import type { GameMode } from './types/chess'
 
 const modeOptions: Array<{ mode: GameMode; label: string; detail: string }> = [
-  { mode: 'bot-easy', label: 'Play with Bot', detail: 'Easy' },
+  { mode: 'bot-easy', label: 'Play with Bot', detail: 'Easy: Minimax' },
+  { mode: 'bot-medium', label: 'Play with Bot', detail: 'Medium: Alpha-Beta' },
   { mode: 'friend', label: 'Play with Friends', detail: 'Human vs Human' },
 ]
 

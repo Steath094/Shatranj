@@ -3,41 +3,24 @@ import { getAllLegalMoves } from "../Position";
 import { applyMove } from "../MoveApplication";
 import { GameRules } from "../GameRules";
 import { evaluatePosition } from "./evaluation";
+import { MATE_SCORE, type SearchStats } from "./minimax";
 
-export const MATE_SCORE = 1_000_000;
-
-export interface SearchStats {
-    nodes: number;
-}
-
-const countNode = (stats?: SearchStats): void => {
-    if (stats) stats.nodes += 1;
-};
-
-export const minimax = (
+export const alphaBeta = (
     position: Position,
     depth: number,
+    alpha: number,
+    beta: number,
     stats?: SearchStats,
 ): number => {
-    countNode(stats);
+    if (stats) stats.nodes += 1;
 
     const moves = getAllLegalMoves(position);
 
-    // Terminal position
     if (moves.length === 0) {
-        // Current player has no legal moves and is in check
-        if (GameRules.isKingInCheck(
-            position.board,
-            position.currentTurn
-        )) {
-            if (position.currentTurn === "white") {
-                return -MATE_SCORE;
-            }
-
-            return MATE_SCORE;
+        if (GameRules.isKingInCheck(position.board, position.currentTurn)) {
+            return position.currentTurn === "white" ? -MATE_SCORE : MATE_SCORE;
         }
 
-        // No legal moves + not in check = stalemate
         return 0;
     }
 
@@ -45,7 +28,6 @@ export const minimax = (
         return 0;
     }
 
-    // Search depth reached
     if (depth === 0) {
         return evaluatePosition(position);
     }
@@ -54,15 +36,17 @@ export const minimax = (
         let bestScore = -Infinity;
 
         for (const move of moves) {
-            const nextPosition = applyMove(position, move);
-
-            const score = minimax(
-                nextPosition,
+            const score = alphaBeta(
+                applyMove(position, move),
                 depth - 1,
+                alpha,
+                beta,
                 stats,
             );
-
             bestScore = Math.max(bestScore, score);
+            alpha = Math.max(alpha, bestScore);
+
+            if (alpha >= beta) break;
         }
 
         return bestScore;
@@ -71,11 +55,17 @@ export const minimax = (
     let bestScore = Infinity;
 
     for (const move of moves) {
-        const nextPosition = applyMove(position, move);
-
-        const score = minimax(nextPosition, depth - 1, stats);
-
+        const score = alphaBeta(
+            applyMove(position, move),
+            depth - 1,
+            alpha,
+            beta,
+            stats,
+        );
         bestScore = Math.min(bestScore, score);
+        beta = Math.min(beta, bestScore);
+
+        if (alpha >= beta) break;
     }
 
     return bestScore;
