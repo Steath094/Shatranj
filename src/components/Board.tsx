@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AI_CONFIG, findBestMove } from "../engine/AI/findBestMove";
 import { Game } from "../engine/Game";
 import type { GameMode, GameSnapshot, Move, PromotionPiece, turn } from "../types/chess";
@@ -20,6 +20,11 @@ type PendingPromotion = {
   choices: PromotionPiece[];
   beforeMove: GameSnapshot;
 } | null;
+
+type RedoEntry = {
+  snapshot: GameSnapshot;
+  undoSnapshots: GameSnapshot[];
+};
 
 const promotionChoices: Record<turn, PromotionPiece[]> = {
   white: ["Q", "R", "B", "N"],
@@ -92,20 +97,22 @@ type BoardProps = {
 
 function Board({ gameMode, onReturnToMenu }: BoardProps) {
   const [game, setGame] = useState(() => new Game());
-  const [, setRevision] = useState(0);
+  const [revision, setRevision] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion>(null);
   const [undoStack, setUndoStack] = useState<GameSnapshot[]>([]);
-  const [redoStack, setRedoStack] = useState<GameSnapshot[]>([]);
+  const [redoStack, setRedoStack] = useState<RedoEntry[]>([]);
   const [dismissedCheckmateAt, setDismissedCheckmateAt] = useState<number | null>(null);
   const [botThinking, setBotThinking] = useState(false);
   const botRequestId = useRef(0);
+  const botThinkingRef = useRef(false);
 
   const lastMove: Move | null = game.history[game.history.length - 1] ?? null;
   const gameStatus = getGameStatus(game);
   const isBotTurn = gameMode === "bot-easy" && game.currentTurn === "black" && !gameStatus.isGameOver;
   const checkedKingSquare = game.isKingInCheck(game.currentTurn) ? game.findKing(game.currentTurn) : null;
   const showCheckmatePopup = gameStatus.title === "Checkmate" && dismissedCheckmateAt !== game.history.length;
+  const controlsLocked = botThinking || isBotTurn;
   const effectiveStatus = botThinking && isBotTurn
     ? {
         title: "Bot is thinking...",
@@ -139,14 +146,10 @@ function Board({ gameMode, onReturnToMenu }: BoardProps) {
     setPendingPromotion(null);
     setDismissedCheckmateAt(null);
     refresh();
-
-    if (gameMode === "bot-easy" && game.currentTurn === "black") {
-      triggerBotTurn();
-    }
   };
 
   const handleSquareClick = (position: number) => {
-    if (pendingPromotion || gameStatus.isGameOver || (gameMode === "bot-easy" && game.currentTurn === "black")) return;
+    if (controlsLocked || pendingPromotion || gameStatus.isGameOver || (gameMode === "bot-easy" && game.currentTurn === "black")) return;
 
     if (game.selectedSquare === null) {
       if (game.board[position] === "") return;
@@ -201,33 +204,40 @@ function Board({ gameMode, onReturnToMenu }: BoardProps) {
   };
 
   const undoMove = () => {
+    if (controlsLocked) return;
     if (undoStack.length === 0) return;
 
-    const previous = undoStack[undoStack.length - 1];
     const current = game.getSnapshot({ clearSelection: true });
+    const undoCount = gameMode === "bot-easy" && game.currentTurn === "white" && undoStack.length >= 2
+      ? 2
+      : 1;
+    const previous = undoStack[undoStack.length - undoCount];
+    const retainedUndoStack = undoStack.slice(0, -undoCount);
+    const redoUndoSnapshots = undoStack.slice(-undoCount);
 
     game.restoreSnapshot(previous);
     setPendingPromotion(null);
-    setUndoStack(undoStack.slice(0, -1));
-    setRedoStack([...redoStack, current]);
+    setUndoStack(retainedUndoStack);
+    setRedoStack([...redoStack, { snapshot: current, undoSnapshots: redoUndoSnapshots }]);
     refresh();
   };
 
   const redoMove = () => {
+    if (controlsLocked) return;
     if (redoStack.length === 0) return;
 
     const next = redoStack[redoStack.length - 1];
-    const current = game.getSnapshot({ clearSelection: true });
 
-    game.restoreSnapshot(next);
+    game.restoreSnapshot(next.snapshot);
     setPendingPromotion(null);
-    setUndoStack([...undoStack, current]);
+    setUndoStack([...undoStack, ...next.undoSnapshots]);
     setRedoStack(redoStack.slice(0, -1));
     refresh();
   };
 
   const restartGame = () => {
     botRequestId.current += 1;
+    botThinkingRef.current = false;
     setBotThinking(false);
     setGame(new Game());
     setPendingPromotion(null);
@@ -236,19 +246,35 @@ function Board({ gameMode, onReturnToMenu }: BoardProps) {
     setDismissedCheckmateAt(null);
   };
 
-  const triggerBotTurn = () => {
-    if (gameMode !== "bot-easy" || botThinking || pendingPromotion) return;
+  useEffect(() => {
+    if (gameMode !== "bot-easy" || botThinkingRef.current || pendingPromotion) return;
     if (game.currentTurn !== "black" || gameStatus.isGameOver) return;
 
     const requestId = ++botRequestId.current;
-    setBotThinking(true);
+    botThinkingRef.current = true;
+
+    window.setTimeout(() => {
+      if (requestId === botRequestId.current) {
+        setBotThinking(true);
+      }
+    }, 0);
 
     window.setTimeout(() => {
       if (requestId !== botRequestId.current) return;
 
-      const move = findBestMove(game.getPosition(), AI_CONFIG.easy.depth);
+      const position = game.getPosition();
+      const status = getGameStatus(game);
+
+      if (position.currentTurn !== "black" || status.isGameOver) {
+        botThinkingRef.current = false;
+        setBotThinking(false);
+        return;
+      }
+
+      const move = findBestMove(position, AI_CONFIG.easy.depth);
 
       if (!move) {
+        botThinkingRef.current = false;
         setBotThinking(false);
         return;
       }
@@ -257,6 +283,7 @@ function Board({ gameMode, onReturnToMenu }: BoardProps) {
       const didApply = game.applyMove(move);
 
       if (!didApply) {
+        botThinkingRef.current = false;
         setBotThinking(false);
         return;
       }
@@ -265,10 +292,11 @@ function Board({ gameMode, onReturnToMenu }: BoardProps) {
       setUndoStack((history) => [...history, beforeMove]);
       setRedoStack([]);
       setDismissedCheckmateAt(null);
+      botThinkingRef.current = false;
       setBotThinking(false);
       refresh();
     }, 550);
-  };
+  }, [game, gameMode, gameStatus.isGameOver, pendingPromotion, revision]);
 
   return (
     <main className="min-h-screen bg-[#262421] px-4 py-4 text-stone-100 sm:px-6 lg:px-8">
@@ -314,8 +342,8 @@ function Board({ gameMode, onReturnToMenu }: BoardProps) {
           isInsufficientMaterial={game.insufficientMaterial()}
           isFiftyMoveRule={game.fiftyMoveRule()}
           isThreefoldRepetition={game.threefoldRepetition()}
-          canUndo={undoStack.length > 0}
-          canRedo={redoStack.length > 0}
+          canUndo={!controlsLocked && undoStack.length > 0}
+          canRedo={!controlsLocked && redoStack.length > 0}
           onFlip={() => setIsFlipped((value) => !value)}
           onRestart={restartGame}
           onUndo={undoMove}

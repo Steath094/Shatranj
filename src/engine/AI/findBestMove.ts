@@ -21,6 +21,12 @@ export const findBestMove = (
 
     let bestMove: Move | null = null;
 
+    const isBetterTieBreak = (move: Move, currentBestMove: Move | null): boolean => {
+        if (currentBestMove === null) return true;
+
+        return isImmediateRepeat(position, currentBestMove) && !isImmediateRepeat(position, move);
+    };
+
     if (position.currentTurn === "white") {
         let bestScore = -Infinity;
 
@@ -28,7 +34,7 @@ export const findBestMove = (
             const nextPosition = applyMove(position, move);
             const score = minimax(nextPosition, depth - 1);
 
-            if (score > bestScore) {
+            if (score > bestScore || (score === bestScore && isBetterTieBreak(move, bestMove))) {
                 bestScore = score;
                 bestMove = move;
             }
@@ -40,7 +46,7 @@ export const findBestMove = (
             const nextPosition = applyMove(position, move);
             const score = minimax(nextPosition, depth - 1);
 
-            if (score < bestScore) {
+            if (score < bestScore || (score === bestScore && isBetterTieBreak(move, bestMove))) {
                 bestScore = score;
                 bestMove = move;
             }
@@ -48,4 +54,25 @@ export const findBestMove = (
     }
 
     return bestMove;
+};
+
+const isImmediateRepeat = (position: Position, move: Move): boolean => {
+    const previousOwnMove = [...position.history]
+        .reverse()
+        .find((historicalMove) => isOwnMove(position, historicalMove));
+
+    if (!previousOwnMove) return false;
+
+    return (
+        move.piece === previousOwnMove.piece &&
+        move.from === previousOwnMove.to &&
+        move.to === previousOwnMove.from &&
+        move.captured === ""
+    );
+};
+
+const isOwnMove = (position: Position, move: Move): boolean => {
+    const isWhiteMove = move.piece === move.piece.toUpperCase();
+
+    return position.currentTurn === "white" ? isWhiteMove : !isWhiteMove;
 };
